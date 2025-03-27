@@ -41,3 +41,5 @@ ENV/
 .DS_Store
 Thumbs.db
 diary_entries/
+out/
+*.exe
