@@ -13,8 +13,8 @@ class DiaryApp(QMainWindow):
     """
     def __init__(self):
         super().__init__()
-        self.diary_folder = "diary_entries"
         self.current_date = QDate.currentDate()
+        self.diary_folder = f"diary_entries/{self.current_date.toString('yyyy')}/{self.current_date.toString('MM')}"  # Store entries in a folder by month
         self.initUI()
         self.ensure_diary_folder()
         self.load_entry_for_date(self.current_date)  # Load today's entry initially
@@ -95,7 +95,7 @@ class DiaryApp(QMainWindow):
         """Create the diary_entries folder if it doesn't exist."""
         if not QDir(self.diary_folder).exists():
             try:
-                QDir().mkdir(self.diary_folder)
+                QDir().mkpath(self.diary_folder)
                 print(f"Created directory: {self.diary_folder}")
             except Exception as e:
                 QMessageBox.critical(self, "错误 (Error)", f"无法创建日记存储目录:\n{self.diary_folder}\n\n{e}")
