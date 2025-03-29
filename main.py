@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout,
     QCalendarWidget, QTextEdit, QMessageBox, QPushButton, QVBoxLayout, QSizePolicy
 )
-from PyQt6.QtCore import QDate, Qt, QDir
+from PyQt6.QtCore import QDate, Qt, QDir, QResource
 from PyQt6.QtGui import QCloseEvent, QFont, QIcon
 
 class DiaryApp(QMainWindow):
@@ -15,8 +15,10 @@ class DiaryApp(QMainWindow):
         super().__init__()
         self.current_date = QDate.currentDate()
         self.diary_folder = f"diary_entries/{self.current_date.toString('yyyy')}/{self.current_date.toString('MM')}"  # Store entries in a folder by month
+        self.old_diary_folder = "diary_entries"  # 旧版日志存储路径
         self.initUI()
         self.ensure_diary_folder()
+        self.migrate_old_entries()  # 迁移旧版日志
         self.load_entry_for_date(self.current_date)  # Load today's entry initially
 
     def initUI(self):
@@ -24,8 +26,8 @@ class DiaryApp(QMainWindow):
         self.setWindowTitle('日历笔记本 (Calendar Diary)')
         self.setGeometry(200, 200, 800, 500)  # x, y, width, height
 
-        # 设置程序图标
-        self.setWindowIcon(QIcon('icon.ico'))  # 加载并设置图标
+        # 设置程序图标 - 通过多种方法尝试加载图标
+        self.load_application_icon()
 
         # --- Central Widget and Layout ---
         central_widget = QWidget(self)
@@ -91,6 +93,40 @@ class DiaryApp(QMainWindow):
         # selectionChanged fires when the user clicks a date
         self.calendar.selectionChanged.connect(self.handle_date_change)
 
+    def load_application_icon(self):
+        """尝试多种方式加载应用图标"""
+        # 1. 尝试从当前运行目录加载
+        if os.path.exists('icon.ico'):
+            self.setWindowIcon(QIcon('icon.ico'))
+            return
+            
+        # 2. 尝试从脚本所在目录加载
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        icon_path = os.path.join(script_dir, 'icon.ico')
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
+            return
+            
+        # 3. 尝试从父目录加载
+        parent_dir = os.path.dirname(script_dir)
+        icon_path = os.path.join(parent_dir, 'icon.ico')
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
+            return
+            
+        # 4. 尝试从打包资源加载
+        try:
+            # 尝试从PyInstaller或Nuitka打包的资源中加载
+            base_path = getattr(sys, '_MEIPASS', script_dir)
+            icon_path = os.path.join(base_path, 'icon.ico')
+            if os.path.exists(icon_path):
+                self.setWindowIcon(QIcon(icon_path))
+                return
+        except:
+            pass
+            
+        print("警告：无法找到图标文件icon.ico")
+
     def ensure_diary_folder(self):
         """Create the diary_entries folder if it doesn't exist."""
         if not QDir(self.diary_folder).exists():
@@ -102,9 +138,83 @@ class DiaryApp(QMainWindow):
                 # Optionally exit or disable saving
                 # sys.exit(1)
 
+    def migrate_old_entries(self):
+        """检测并迁移旧版日志到新的分层目录结构中"""
+        # 确保旧版目录存在
+        if not QDir(self.old_diary_folder).exists():
+            return
+
+        # 获取旧版目录中的所有txt文件
+        old_dir = QDir(self.old_diary_folder)
+        old_dir.setNameFilters(["*.txt"])
+        files = old_dir.entryList(QDir.Filter.Files)
+
+        # 遍历所有旧版日志文件
+        migrated_count = 0
+        for file_name in files:
+            # 解析文件名中的日期 (格式如: 2024-03-29.txt)
+            try:
+                date_str = file_name.replace(".txt", "")
+                date_parts = date_str.split("-")
+                
+                if len(date_parts) == 3:
+                    year, month, day = date_parts
+                    entry_date = QDate(int(year), int(month), int(day))
+                    
+                    # 获取新旧文件路径
+                    old_file_path = os.path.join(self.old_diary_folder, file_name)
+                    
+                    # 跳过已经在层级结构中的文件
+                    if not os.path.isfile(old_file_path):
+                        continue
+                        
+                    # 为此日期创建新目录
+                    new_folder = f"diary_entries/{entry_date.toString('yyyy')}/{entry_date.toString('MM')}"
+                    if not QDir(new_folder).exists():
+                        QDir().mkpath(new_folder)
+                    
+                    new_file_path = os.path.join(new_folder, file_name)
+                    
+                    # 如果新路径不存在，复制文件
+                    if not os.path.exists(new_file_path):
+                        with open(old_file_path, 'r', encoding='utf-8') as src:
+                            content = src.read()
+                            with open(new_file_path, 'w', encoding='utf-8') as dst:
+                                dst.write(content)
+                        migrated_count += 1
+                        print(f"迁移日志: {old_file_path} -> {new_file_path}")
+            except Exception as e:
+                print(f"迁移文件 {file_name} 时出错: {e}")
+                
+        if migrated_count > 0:
+            print(f"成功迁移 {migrated_count} 个旧版日志")
+
     def get_filename_for_date(self, date: QDate) -> str:
         """Generate the filename for a given date (e.g., YYYY-MM-DD.txt)."""
-        return os.path.join(self.diary_folder, date.toString("yyyy-MM-dd") + ".txt")
+        new_file = os.path.join(self.diary_folder, date.toString("yyyy-MM-dd") + ".txt")
+        
+        # 兼容旧版日志存储方式
+        old_file = os.path.join(self.old_diary_folder, date.toString("yyyy-MM-dd") + ".txt")
+        
+        # 检查是否存在旧版日志，如果存在且新版不存在，则迁移
+        if os.path.exists(old_file) and not os.path.exists(new_file):
+            # 确保新目录存在
+            year_month_folder = f"diary_entries/{date.toString('yyyy')}/{date.toString('MM')}"
+            if not QDir(year_month_folder).exists():
+                QDir().mkpath(year_month_folder)
+                
+            # 复制内容
+            try:
+                with open(old_file, 'r', encoding='utf-8') as src:
+                    content = src.read()
+                    with open(new_file, 'w', encoding='utf-8') as dst:
+                        dst.write(content)
+                print(f"按需迁移日志: {old_file} -> {new_file}")
+            except Exception as e:
+                print(f"迁移文件时出错: {e}")
+        
+        # 始终返回新版路径
+        return new_file
 
     def load_entry_for_date(self, date: QDate):
         """Load the diary entry for the specified date into the text editor."""
