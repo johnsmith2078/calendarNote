@@ -2,10 +2,197 @@ import sys
 import os
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout,
-    QCalendarWidget, QTextEdit, QMessageBox, QPushButton, QVBoxLayout, QSizePolicy
+    QCalendarWidget, QTextEdit, QMessageBox, QPushButton, QVBoxLayout, QSizePolicy,
+    QLineEdit, QListWidget, QListWidgetItem, QDialog, QLabel, QGridLayout
 )
 from PyQt6.QtCore import QDate, Qt, QDir, QResource, QDirIterator
-from PyQt6.QtGui import QCloseEvent, QFont, QIcon, QTextCharFormat, QColor
+from PyQt6.QtGui import QCloseEvent, QFont, QIcon, QTextCharFormat, QColor, QTextDocument
+
+class SearchResultItem:
+    """表示搜索结果中的一个条目"""
+    def __init__(self, date: QDate, content: str, match_text: str):
+        self.date = date
+        self.content = content
+        self.match_text = match_text
+        
+    def __str__(self):
+        """返回用于显示的字符串表示"""
+        date_str = self.date.toString('yyyy-MM-dd')
+        if self.match_text:
+            # 截断过长的匹配文本
+            display_text = self.match_text
+            if len(display_text) > 60:
+                display_text = display_text[:57] + "..."
+            return f"{date_str}: {display_text}"
+        else:
+            return date_str
+
+class SearchDialog(QDialog):
+    """搜索结果对话框"""
+    def __init__(self, parent=None, results=None, keyword=None):
+        super().__init__(parent)
+        self.setWindowTitle("搜索结果")
+        self.setGeometry(300, 300, 600, 400)
+        self.selected_date = None
+        self.keyword = keyword  # 保存搜索关键词以便高亮
+        self.initUI()
+        
+        if results:
+            self.display_results(results)
+    
+    def initUI(self):
+        layout = QVBoxLayout(self)
+        
+        # 搜索结果数量标签
+        self.result_count_label = QLabel("找到 0 个结果", self)
+        layout.addWidget(self.result_count_label)
+        
+        # 搜索结果列表
+        self.result_list = QListWidget(self)
+        self.result_list.setWordWrap(True)  # 允许文本换行
+        self.result_list.setTextElideMode(Qt.TextElideMode.ElideMiddle)  # 太长时在中间显示省略号
+        # 允许列表项显示 HTML 富文本
+        self.result_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)  # 禁用水平滚动条
+        self.result_list.itemDoubleClicked.connect(self.item_double_clicked)
+        layout.addWidget(self.result_list)
+        
+        # 预览区域
+        preview_label = QLabel("预览:", self)
+        layout.addWidget(preview_label)
+        
+        self.preview_text = QTextEdit(self)
+        self.preview_text.setReadOnly(True)
+        layout.addWidget(self.preview_text)
+        
+        # 关闭按钮
+        close_button = QPushButton("关闭", self)
+        close_button.clicked.connect(self.reject)
+        
+        # 跳转按钮
+        self.goto_button = QPushButton("跳转到日期", self)
+        self.goto_button.clicked.connect(self.accept)
+        self.goto_button.setEnabled(False)
+        
+        # 按钮布局
+        button_layout = QHBoxLayout()
+        button_layout.addWidget(self.goto_button)
+        button_layout.addWidget(close_button)
+        layout.addLayout(button_layout)
+        
+    def display_results(self, results):
+        """显示搜索结果"""
+        self.results = results
+        self.result_list.clear()
+        self.preview_text.clear()
+        
+        # 更新结果数量
+        count = len(results)
+        self.result_count_label.setText(f"找到 {count} 个结果")
+        
+        # 添加结果到列表
+        for result in results:
+            # 创建带有日期的项目文本
+            date_text = result.date.toString('yyyy-MM-dd')
+            
+            # 创建基本列表项
+            item = QListWidgetItem()
+            item.setData(Qt.ItemDataRole.UserRole, result)
+            
+            # 如果有匹配文本，显示带有匹配文本的项目
+            if result.match_text:
+                # 使用简单文本格式，避免HTML高亮导致的性能问题
+                item_text = f"{date_text}: {result.match_text}"
+                item.setText(item_text)
+            else:
+                # 没有匹配文本，只显示日期
+                item.setText(date_text)
+                
+            self.result_list.addItem(item)
+    
+    def _escape_html(self, text):
+        """转义HTML特殊字符"""
+        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;").replace("'", "&#39;")
+
+    def item_double_clicked(self, item):
+        """当用户双击结果项时"""
+        result = item.data(Qt.ItemDataRole.UserRole)
+        if result:
+            self.selected_date = result.date
+            
+            # 显示文本内容，如果有关键词则高亮显示
+            if self.keyword and self.keyword.strip():
+                self.show_highlighted_content(result.content, self.keyword)
+            else:
+                self.preview_text.setPlainText(result.content)
+                
+            self.goto_button.setEnabled(True)
+    
+    def show_highlighted_content(self, content, keyword):
+        """显示带有高亮的内容"""
+        # 避免处理过长的内容导致UI卡死
+        MAX_TEXT_LENGTH = 100000  # 限制处理的最大文本长度
+        if len(content) > MAX_TEXT_LENGTH:
+            # 对过长的内容，只显示前面的部分，不进行高亮处理
+            self.preview_text.setPlainText(content[:MAX_TEXT_LENGTH] + "\n\n[文本过长，已截断显示...]")
+            return
+            
+        try:
+            # 清空当前内容
+            self.preview_text.clear()
+            
+            # 先设置普通文本
+            self.preview_text.setPlainText(content)
+            
+            # 如果关键词为空，不进行高亮处理
+            if not keyword or not keyword.strip():
+                return
+                
+            # 处理不区分大小写的搜索
+            keyword_lower = keyword.lower()
+            
+            # 创建高亮格式
+            highlight_format = self.preview_text.textCursor().charFormat()
+            highlight_format.setBackground(QColor(255, 255, 0))  # 黄色背景
+            highlight_format.setForeground(QColor(0, 0, 0))      # 黑色文字
+            
+            # 设置初始搜索位置
+            cursor = self.preview_text.textCursor()
+            cursor.movePosition(cursor.MoveOperation.Start)  # 移动到文档开始
+            self.preview_text.setTextCursor(cursor)
+            
+            # 限制高亮次数，避免无限循环
+            max_highlights = 500
+            highlight_count = 0
+            
+            # 查找并高亮内容
+            while highlight_count < max_highlights:
+                # 执行不区分大小写的搜索
+                found = self.preview_text.find(keyword, QTextDocument.FindFlag(0))  # 不区分大小写
+                if not found:
+                    break  # 没有找到更多匹配，退出循环
+                    
+                # 获取当前光标并应用高亮格式
+                cursor = self.preview_text.textCursor()
+                if cursor.hasSelection():
+                    cursor.mergeCharFormat(highlight_format)
+                    highlight_count += 1
+                else:
+                    break  # 没有选中文本，退出循环
+                    
+            # 重置光标到文档开始
+            cursor = self.preview_text.textCursor()
+            cursor.movePosition(cursor.MoveOperation.Start)
+            self.preview_text.setTextCursor(cursor)
+            
+        except Exception as e:
+            # 异常处理
+            print(f"高亮文本时出错: {e}")
+            # 确保至少显示原始内容
+            self.preview_text.setPlainText(content)
+    
+    def get_selected_date(self):
+        """返回用户选择的日期"""
+        return self.selected_date
 
 class DiaryApp(QMainWindow):
     """
@@ -26,6 +213,9 @@ class DiaryApp(QMainWindow):
         self.highlight_format.setFontWeight(QFont.Weight.Bold)
         # 使用更鲜艳的背景色
         self.highlight_format.setBackground(QColor(220, 235, 255))  # 淡蓝色背景
+
+        # 添加状态栏显示
+        self.statusBar().showMessage("就绪")
 
         self.initUI()
         self.ensure_base_diary_folder() # 确保基础目录存在
@@ -62,6 +252,24 @@ class DiaryApp(QMainWindow):
         self.today_button = QPushButton(f"今天 ({show_date})", self)
         self.today_button.clicked.connect(self.return_to_today)
 
+        # --- 搜索区域 ---
+        search_layout = QHBoxLayout()
+        search_label = QLabel("搜索日记:", self)
+        self.search_input = QLineEdit(self)
+        self.search_input.setPlaceholderText("输入关键词...")
+        self.search_input.returnPressed.connect(self.perform_search)  # 回车键触发搜索
+        
+        self.search_button = QPushButton("搜索", self)
+        self.search_button.clicked.connect(self.perform_search)
+        
+        search_layout.addWidget(search_label)
+        search_layout.addWidget(self.search_input, 1)  # 分配更多空间给搜索框
+        search_layout.addWidget(self.search_button)
+        v_layout.addLayout(search_layout)
+        
+        # 添加今天按钮
+        v_layout.addWidget(self.today_button)  # Add today button
+
         # --- Calendar Widget ---
         self.calendar = QCalendarWidget(self)
         self.calendar.setGridVisible(True)
@@ -90,8 +298,7 @@ class DiaryApp(QMainWindow):
             QSizePolicy.Policy.Fixed   # 垂直方向固定
         )
 
-        # 将按钮和日历加入垂直布局
-        v_layout.addWidget(self.today_button)  # Add today button above calendar
+        # 将日历加入垂直布局
         v_layout.addWidget(self.calendar)      # Add calendar below the button
 
         # --- Text Edit Widget ---
@@ -511,6 +718,260 @@ class DiaryApp(QMainWindow):
         
         print(f"完成日历高亮更新: {year}-{month:02d}")
 
+    # --- 搜索功能 ---
+    def perform_search(self):
+        """执行日记内容搜索"""
+        keyword = self.search_input.text().strip()
+        if not keyword:
+            QMessageBox.information(self, "搜索提示", "请输入要搜索的关键词")
+            return
+            
+        # 保存当前内容
+        self.save_entry_for_date(self.current_date)
+        
+        # 显示搜索中的提示
+        self.statusBar().showMessage(f"正在搜索 '{keyword}'...")
+        self.search_button.setEnabled(False)
+        self.search_input.setEnabled(False)
+        QApplication.processEvents()  # 确保UI更新
+        
+        try:
+            # 执行搜索
+            print(f"开始搜索关键词: {keyword}")
+            results = self.search_diary_entries(keyword)
+            
+            # 恢复UI状态
+            self.search_button.setEnabled(True)
+            self.search_input.setEnabled(True)
+            self.statusBar().clearMessage()
+            
+            if not results:
+                QMessageBox.information(self, "搜索结果", f"未找到包含 '{keyword}' 的日记")
+                return
+                
+            # 显示搜索结果对话框，传递关键词用于高亮显示
+            dlg = SearchDialog(self, results, keyword)
+            # 设置对话框标题包含搜索关键词
+            dlg.setWindowTitle(f"搜索结果 - '{keyword}'")
+            
+            if dlg.exec() == QDialog.DialogCode.Accepted:
+                # 用户选择了一个结果并点击了跳转
+                selected_date = dlg.get_selected_date()
+                if selected_date and selected_date.isValid():
+                    # 切换到选定的日期
+                    self.calendar.setSelectedDate(selected_date)
+                    # handle_date_change 会通过信号自动触发
+        except Exception as e:
+            QMessageBox.critical(self, "搜索错误", f"搜索过程中发生错误:\n{e}")
+        finally:
+            # 无论如何都确保UI恢复
+            self.search_button.setEnabled(True)
+            self.search_input.setEnabled(True)
+            self.statusBar().clearMessage()
+
+    def search_diary_entries(self, keyword):
+        """
+        在所有日记文件中搜索关键词
+        返回: 搜索结果列表 [SearchResultItem, ...]
+        """
+        results = []
+        keyword = keyword.lower()  # 不区分大小写
+        total_files_searched = 0
+        
+        try:
+            # 获取所有可能的日记文件路径
+            diary_files = self._collect_all_diary_files()
+            total_files = len(diary_files)
+            
+            if total_files == 0:
+                print("未找到任何日记文件")
+                return results
+                
+            print(f"开始搜索 {total_files} 个文件...")
+            
+            # 搜索每个文件
+            for idx, file_path in enumerate(diary_files):
+                # 更新状态栏显示搜索进度
+                if idx % 3 == 0:  # 每3个文件更新一次，避免过于频繁的UI更新
+                    self.statusBar().showMessage(f"正在搜索... ({idx+1}/{total_files})")
+                    QApplication.processEvents()  # 确保UI响应
+                
+                # 添加超时检测，避免大文件卡死
+                try:
+                    # 限制文件大小，跳过过大的文件
+                    file_size = os.path.getsize(file_path)
+                    if file_size > 1024 * 1024:  # 跳过大于1MB的文件
+                        print(f"跳过大文件 {file_path} ({file_size / 1024:.1f} KB)")
+                        continue
+                        
+                    self._search_in_file(file_path, keyword, results)
+                    total_files_searched += 1
+                except Exception as e:
+                    print(f"搜索文件 {file_path} 时出错: {e}")
+                
+            print(f"搜索完成: 共搜索 {total_files_searched} 个文件，找到 {len(results)} 个结果")
+            
+        except Exception as e:
+            print(f"搜索过程中出错: {e}")
+            raise
+            
+        # 按日期排序结果（从新到旧）
+        results.sort(key=lambda x: x.date, reverse=True)
+        
+        # 限制返回结果数量，避免显示过多结果导致UI卡死
+        MAX_RESULTS = 100
+        if len(results) > MAX_RESULTS:
+            print(f"结果过多，只显示前 {MAX_RESULTS} 个")
+            return results[:MAX_RESULTS]
+            
+        return results
+    
+    def _collect_all_diary_files(self):
+        """收集所有日记文件路径"""
+        diary_files = []
+        
+        # 1. 从新目录结构中收集
+        try:
+            for year_dir in self._get_valid_dirs(self.diary_folder_base):
+                year_path = os.path.join(self.diary_folder_base, year_dir)
+                
+                for month_dir in self._get_valid_dirs(year_path):
+                    month_path = os.path.join(year_path, month_dir)
+                    
+                    for file_name in os.listdir(month_path):
+                        if file_name.endswith('.txt'):
+                            file_path = os.path.join(month_path, file_name)
+                            diary_files.append(file_path)
+        except Exception as e:
+            print(f"收集新目录结构文件时出错: {e}")
+        
+        # 2. 从旧目录中收集
+        if os.path.exists(self.old_diary_folder) and os.path.isdir(self.old_diary_folder):
+            try:
+                for file_name in os.listdir(self.old_diary_folder):
+                    if file_name.endswith('.txt'):
+                        file_path = os.path.join(self.old_diary_folder, file_name)
+                        # 确保文件名格式正确
+                        if self._is_valid_diary_filename(file_name):
+                            # 检查该文件是否已经在新目录结构中
+                            if not self._file_exists_in_new_structure(file_name):
+                                diary_files.append(file_path)
+            except Exception as e:
+                print(f"收集旧目录文件时出错: {e}")
+                
+        return diary_files
+    
+    def _is_valid_diary_filename(self, filename):
+        """检查文件名是否为有效的日记文件名 (YYYY-MM-DD.txt)"""
+        if not filename.endswith('.txt'):
+            return False
+            
+        date_str = filename.replace(".txt", "")
+        parts = date_str.split("-")
+        
+        if len(parts) != 3:
+            return False
+            
+        try:
+            year, month, day = map(int, parts)
+            # 简单校验日期格式
+            return 1 <= month <= 12 and 1 <= day <= 31
+        except ValueError:
+            return False
+    
+    def _file_exists_in_new_structure(self, filename):
+        """检查文件是否已存在于新目录结构中"""
+        date_str = filename.replace(".txt", "")
+        parts = date_str.split("-")
+        
+        if len(parts) != 3:
+            return False
+            
+        year, month, _ = parts
+        new_path = os.path.join(self.diary_folder_base, year, month, filename)
+        return os.path.exists(new_path)
+        
+    def _get_valid_dirs(self, path):
+        """获取目录中的所有有效子目录"""
+        if not os.path.exists(path) or not os.path.isdir(path):
+            return []
+            
+        return [d for d in os.listdir(path) if os.path.isdir(os.path.join(path, d))]
+        
+    def _search_in_file(self, file_path, keyword, results):
+        """在单个文件中搜索关键词并将结果添加到结果列表"""
+        try:
+            # 从文件名中提取日期
+            file_name = os.path.basename(file_path)
+            date_str = file_name.replace(".txt", "")
+            entry_date = QDate.fromString(date_str, "yyyy-MM-dd")
+            
+            if not entry_date.isValid():
+                return
+            
+            # 限制文件大小，避免处理超大文件
+            max_file_size = 512 * 1024  # 512KB
+            file_size = os.path.getsize(file_path)
+            if file_size > max_file_size:
+                print(f"文件过大，部分处理: {file_path} ({file_size/1024:.1f}KB)")
+                # 对大文件只读取前面部分
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read(max_file_size)
+                    content += "\n\n[文件过大，未显示完整内容...]"
+            else:
+                # 读取完整文件内容
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+            
+            # 搜索关键词
+            content_lower = content.lower()
+            if keyword.lower() in content_lower:
+                # 提取关键词周围的上下文
+                match_text = self._extract_context(content, keyword)
+                
+                # 对过长的内容进行截断，避免存储和显示过多内容
+                MAX_CONTENT_LENGTH = 200000  # 限制最大内容长度为200KB
+                if len(content) > MAX_CONTENT_LENGTH:
+                    content = content[:MAX_CONTENT_LENGTH] + "\n\n[内容过长，已截断显示...]"
+                    
+                results.append(SearchResultItem(entry_date, content, match_text))
+        except UnicodeDecodeError:
+            print(f"无法解码文件: {file_path} (可能是二进制文件)")
+        except Exception as e:
+            print(f"在文件 {file_path} 中搜索时出错: {e}")
+            
+    def _extract_context(self, content, keyword, context_chars=40):
+        """从文本中提取关键词周围的上下文，限制上下文长度"""
+        content_lower = content.lower()
+        keyword_lower = keyword.lower()
+        
+        # 限制搜索长度，避免处理超长文本
+        MAX_SEARCH_TEXT = 100000  # 最多搜索10万字符
+        if len(content) > MAX_SEARCH_TEXT:
+            search_content = content[:MAX_SEARCH_TEXT]
+            search_content_lower = search_content.lower()
+        else:
+            search_content = content
+            search_content_lower = content_lower
+        
+        pos = search_content_lower.find(keyword_lower)
+        if pos < 0:
+            return "..."
+            
+        # 计算上下文的起始和结束位置
+        start = max(0, pos - context_chars)
+        end = min(len(search_content), pos + len(keyword) + context_chars)
+        
+        # 提取上下文
+        context = search_content[start:end]
+        
+        # 添加省略号指示这是内容的一部分
+        if start > 0:
+            context = "..." + context
+        if end < len(search_content):
+            context = context + "..."
+            
+        return context
 
 # --- Main Execution ---
 if __name__ == '__main__':
