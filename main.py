@@ -219,7 +219,6 @@ class DiaryApp(QMainWindow):
 
         self.initUI()
         self.ensure_base_diary_folder() # 确保基础目录存在
-        self.migrate_old_entries()  # 迁移旧版日志
         self.load_entry_for_date(self.current_date)  # Load today's entry initially
         
         # 确保在完全初始化后调用高亮
@@ -364,62 +363,6 @@ class DiaryApp(QMainWindow):
                 QMessageBox.critical(self, "错误 (Error)", f"无法创建日记存储基础目录:\n{self.diary_folder_base}\n\n{e}")
                 # Optionally exit or disable saving
                 # sys.exit(1)
-
-    def migrate_old_entries(self):
-        """检测并迁移旧版日志到新的分层目录结构中"""
-        # 确保旧版目录存在
-        if not QDir(self.old_diary_folder).exists():
-            return
-
-        # 获取旧版目录中的所有txt文件
-        old_dir = QDir(self.old_diary_folder)
-        old_dir.setNameFilters(["*.txt"])
-        files = old_dir.entryList(QDir.Filter.Files)
-
-        # 遍历所有旧版日志文件
-        migrated_count = 0
-        for file_name in files:
-            # 解析文件名中的日期 (格式如: 2024-03-29.txt)
-            try:
-                date_str = file_name.replace(".txt", "")
-                date_parts = date_str.split("-")
-                
-                if len(date_parts) == 3:
-                    year, month, day = date_parts
-                    entry_date = QDate(int(year), int(month), int(day))
-                    
-                    # 获取新旧文件路径
-                    old_file_path = os.path.join(self.old_diary_folder, file_name)
-                    
-                    # 跳过已经在层级结构中的文件
-                    if not os.path.isfile(old_file_path):
-                        continue
-                        
-                    # 为此日期创建新目录
-                    new_folder = os.path.join(self.diary_folder_base, entry_date.toString('yyyy'), entry_date.toString('MM'))
-                    if not QDir(new_folder).exists():
-                        if QDir().mkpath(new_folder):
-                            print(f"为迁移创建了目录: {new_folder}") # 添加日志
-                        else:
-                             print(f"错误: 无法为迁移创建目录 {new_folder}") # 添加日志
-                             continue # 跳过此文件
-
-                    new_file_path = os.path.join(new_folder, file_name)
-                    
-                    # 如果新路径不存在，复制文件
-                    if not os.path.exists(new_file_path):
-                        with open(old_file_path, 'r', encoding='utf-8') as src:
-                            content = src.read()
-                            with open(new_file_path, 'w', encoding='utf-8') as dst:
-                                dst.write(content)
-                        migrated_count += 1
-                        print(f"迁移日志: {old_file_path} -> {new_file_path}")
-            except Exception as e:
-                print(f"迁移文件 {file_name} 时出错: {e}")
-                
-        if migrated_count > 0:
-            print(f"成功迁移 {migrated_count} 个旧版日志")
-            self.update_calendar_highlighting() # 迁移后更新高亮
 
     def get_filename_for_date(self, date: QDate) -> str:
         """Generate the filename for a given date (e.g., diary_entries/YYYY/MM/YYYY-MM-DD.txt)."""
@@ -844,20 +787,6 @@ class DiaryApp(QMainWindow):
                             diary_files.append(file_path)
         except Exception as e:
             print(f"收集新目录结构文件时出错: {e}")
-        
-        # 2. 从旧目录中收集
-        if os.path.exists(self.old_diary_folder) and os.path.isdir(self.old_diary_folder):
-            try:
-                for file_name in os.listdir(self.old_diary_folder):
-                    if file_name.endswith('.txt'):
-                        file_path = os.path.join(self.old_diary_folder, file_name)
-                        # 确保文件名格式正确
-                        if self._is_valid_diary_filename(file_name):
-                            # 检查该文件是否已经在新目录结构中
-                            if not self._file_exists_in_new_structure(file_name):
-                                diary_files.append(file_path)
-            except Exception as e:
-                print(f"收集旧目录文件时出错: {e}")
                 
         return diary_files
     
