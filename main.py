@@ -1,12 +1,14 @@
 import sys
 import os
+import time  # 添加时间模块用于性能监控
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout,
     QCalendarWidget, QTextEdit, QMessageBox, QPushButton, QVBoxLayout, QSizePolicy,
-    QLineEdit, QListWidget, QListWidgetItem, QDialog, QLabel, QGridLayout
+    QLineEdit, QListWidget, QListWidgetItem, QDialog, QLabel, QGridLayout,
+    QCheckBox
 )
-from PyQt6.QtCore import QDate, Qt, QDir, QResource, QDirIterator
-from PyQt6.QtGui import QCloseEvent, QFont, QIcon, QTextCharFormat, QColor, QTextDocument, QKeySequence
+from PyQt6.QtCore import QDate, Qt, QDir, QResource, QDirIterator, QTimer
+from PyQt6.QtGui import QCloseEvent, QFont, QIcon, QTextCharFormat, QColor, QTextDocument, QKeySequence, QAction, QShortcut
 
 class PlainTextEdit(QTextEdit):
     """
@@ -247,6 +249,324 @@ class SearchDialog(QDialog):
         """返回用户选择的日期"""
         return self.selected_date
 
+class InPageSearchDialog(QDialog):
+    """页面内搜索对话框"""
+    def __init__(self, parent=None, text_edit=None):
+        super().__init__(parent)
+        self.text_edit = text_edit
+        self.current_match_index = -1
+        self.previous_match_index = -1  # 添加：跟踪上一个匹配项的索引
+        self.matches = []
+        self.original_format = QTextCharFormat()  # 保存原始格式
+        self.search_format = QTextCharFormat()   # 搜索高亮格式
+
+        # 设置搜索高亮格式
+        self.search_format.setBackground(QColor(255, 255, 0))  # 黄色背景
+        self.search_format.setForeground(QColor(0, 0, 0))      # 黑色文字
+
+        self.current_format = QTextCharFormat()  # 当前匹配高亮格式
+        self.current_format.setBackground(QColor(0, 100, 255))  # 更鲜艳的蓝色背景
+        self.current_format.setForeground(QColor(255, 255, 255))  # 白色文字，提高对比度
+
+        # 添加搜索防抖定时器
+        self.search_timer = QTimer()
+        self.search_timer.setSingleShot(True)
+        self.search_timer.timeout.connect(self.delayed_search)
+        self.search_delay = 300  # 300ms 延迟
+
+        self.initUI()
+
+    def initUI(self):
+        """初始化用户界面"""
+        self.setWindowTitle("页面内搜索")
+        self.setFixedSize(400, 120)
+
+        # 设置窗口标志，使其保持在父窗口前面
+        self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.WindowStaysOnTopHint)
+
+        layout = QVBoxLayout(self)
+
+        # 搜索输入区域
+        search_layout = QHBoxLayout()
+        search_label = QLabel("查找:", self)
+        self.search_input = QLineEdit(self)
+        self.search_input.setPlaceholderText("输入要查找的文本...")
+        self.search_input.textChanged.connect(self.on_search_text_changed)
+        self.search_input.returnPressed.connect(self.find_next)
+
+        search_layout.addWidget(search_label)
+        search_layout.addWidget(self.search_input, 1)
+        layout.addLayout(search_layout)
+
+        # 选项区域
+        options_layout = QHBoxLayout()
+        self.case_sensitive_cb = QCheckBox("区分大小写", self)
+        self.case_sensitive_cb.stateChanged.connect(self.on_search_text_changed)
+        options_layout.addWidget(self.case_sensitive_cb)
+        options_layout.addStretch()  # 添加弹性空间
+        layout.addLayout(options_layout)
+
+        # 按钮区域
+        button_layout = QHBoxLayout()
+
+        self.prev_button = QPushButton("上一个", self)
+        self.prev_button.clicked.connect(self.find_previous)
+        self.prev_button.setEnabled(False)
+
+        self.next_button = QPushButton("下一个", self)
+        self.next_button.clicked.connect(self.find_next)
+        self.next_button.setEnabled(False)
+
+        self.close_button = QPushButton("关闭", self)
+        self.close_button.clicked.connect(self.close_search)
+
+        # 结果计数标签
+        self.result_label = QLabel("", self)
+
+        button_layout.addWidget(self.result_label)
+        button_layout.addStretch()
+        button_layout.addWidget(self.prev_button)
+        button_layout.addWidget(self.next_button)
+        button_layout.addWidget(self.close_button)
+        layout.addLayout(button_layout)
+
+        # 设置焦点到搜索输入框
+        self.search_input.setFocus()
+
+    def on_search_text_changed(self):
+        """搜索文本变化时的处理（使用防抖）"""
+        search_text = self.search_input.text()
+        if not search_text:
+            self.clear_highlights()
+            self.update_ui_state(0)
+            self.search_timer.stop()
+            return
+
+        # 重启定时器，实现防抖效果
+        self.search_timer.stop()
+        self.search_timer.start(self.search_delay)
+
+    def delayed_search(self):
+        """延迟执行的搜索"""
+        search_text = self.search_input.text()
+        if search_text:
+            # 显示搜索进度
+            self.result_label.setText("搜索中...")
+            self.prev_button.setEnabled(False)
+            self.next_button.setEnabled(False)
+
+            # 使用 QTimer 来异步执行搜索，避免阻塞UI
+            QTimer.singleShot(10, lambda: self.perform_search(search_text))
+
+    def perform_search(self, search_text):
+        """执行搜索（优化版本）"""
+        if not self.text_edit or not search_text:
+            return
+
+        # 清除之前的高亮
+        self.clear_highlights()
+
+        # 获取文档内容和长度
+        document = self.text_edit.document()
+        full_text = document.toPlainText()
+        text_length = len(full_text)
+
+        # 对于超长文本，限制搜索范围但不限制匹配数量
+        MAX_TEXT_LENGTH = 50000  # 最大搜索文本长度
+
+        if text_length > MAX_TEXT_LENGTH:
+            self.result_label.setText(f"文本过长，仅搜索前{MAX_TEXT_LENGTH//1000}K字符")
+
+        # 获取搜索标志
+        flags = QTextDocument.FindFlag(0)
+        if self.case_sensitive_cb.isChecked():
+            flags |= QTextDocument.FindFlag.FindCaseSensitively
+
+        # 使用优化的搜索算法（取消匹配数量限制）
+        self.matches = []
+        cursor = self.text_edit.textCursor()
+        cursor.movePosition(cursor.MoveOperation.Start)
+
+        # 搜索所有匹配项，不限制数量
+        while True:
+            cursor = document.find(search_text, cursor, flags)
+            if cursor.isNull():
+                break
+
+            # 检查是否超出搜索范围
+            if text_length > MAX_TEXT_LENGTH and cursor.position() > MAX_TEXT_LENGTH:
+                break
+
+            self.matches.append(cursor)
+
+        # 批量高亮匹配项（优化版本）
+        self.highlight_matches_optimized()
+
+        # 更新UI状态
+        total_matches = len(self.matches)
+        if text_length > MAX_TEXT_LENGTH:
+            # 对于超长文本，显示特殊提示
+            self.update_ui_state_with_limit(total_matches)
+        else:
+            self.update_ui_state(total_matches)
+
+        # 如果有匹配项，跳转到第一个
+        if self.matches:
+            self.current_match_index = 0
+            self.previous_match_index = -1  # 初始化时没有上一个匹配项
+            self.highlight_current_match()
+
+    def highlight_matches_optimized(self):
+        """优化的批量高亮方法"""
+        if not self.matches:
+            return
+
+        # 暂时禁用文本编辑器的更新，提高批量操作性能
+        self.text_edit.setUpdatesEnabled(False)
+
+        try:
+            # 创建一个临时的格式化对象
+            temp_cursor = self.text_edit.textCursor()
+
+            # 批量应用格式，减少重绘次数
+            for match_cursor in self.matches:
+                temp_cursor.setPosition(match_cursor.selectionStart())
+                temp_cursor.setPosition(match_cursor.selectionEnd(), temp_cursor.MoveMode.KeepAnchor)
+                temp_cursor.mergeCharFormat(self.search_format)
+        finally:
+            # 重新启用更新并强制刷新
+            self.text_edit.setUpdatesEnabled(True)
+            self.text_edit.update()
+
+    def update_ui_state_with_limit(self, match_count):
+        """更新UI状态（超长文本提示）"""
+        has_matches = match_count > 0
+        self.prev_button.setEnabled(has_matches)
+        self.next_button.setEnabled(has_matches)
+
+        if match_count == 0:
+            self.result_label.setText("未找到")
+        else:
+            self.result_label.setText(f"1/{match_count} (仅搜索部分文本)")
+
+    def highlight_current_match(self):
+        """高亮当前匹配项（优化版本）"""
+        if 0 <= self.current_match_index < len(self.matches):
+            # 优化：只更新需要改变的匹配项，而不是遍历所有匹配项
+
+            # 1. 如果有上一个匹配项且与当前不同，将其恢复为普通搜索高亮
+            if (0 <= self.previous_match_index < len(self.matches) and
+                self.previous_match_index != self.current_match_index):
+                prev_cursor = self.matches[self.previous_match_index]
+                prev_cursor.mergeCharFormat(self.search_format)
+
+            # 2. 将当前匹配项设置为当前高亮（只有在需要时才设置）
+            current_cursor = self.matches[self.current_match_index]
+            if self.previous_match_index != self.current_match_index:
+                current_cursor.mergeCharFormat(self.current_format)
+
+            # 3. 滚动到当前匹配位置
+            self.text_edit.setTextCursor(current_cursor)
+            self.text_edit.ensureCursorVisible()
+
+            # 4. 确保文本编辑器获得焦点，这样蓝色高亮才会显示
+            self.text_edit.setFocus()
+
+            # 5. 更新结果标签
+            self.result_label.setText(f"{self.current_match_index + 1}/{len(self.matches)}")
+
+            # 6. 更新上一个匹配项索引
+            self.previous_match_index = self.current_match_index
+
+    def find_next(self):
+        """查找下一个（优化版本）"""
+        if self.matches:
+            # 性能监控：记录开始时间
+            start_time = time.time()
+
+            # 保存当前索引作为上一个索引
+            self.previous_match_index = self.current_match_index
+            # 移动到下一个匹配项
+            self.current_match_index = (self.current_match_index + 1) % len(self.matches)
+            self.highlight_current_match()
+
+            # 性能监控：计算耗时
+            elapsed_time = (time.time() - start_time) * 1000  # 转换为毫秒
+            if elapsed_time > 10:  # 只记录超过10ms的操作
+                print(f"find_next 耗时: {elapsed_time:.2f}ms (匹配数: {len(self.matches)})")
+
+    def find_previous(self):
+        """查找上一个（优化版本）"""
+        if self.matches:
+            # 性能监控：记录开始时间
+            start_time = time.time()
+
+            # 保存当前索引作为上一个索引
+            self.previous_match_index = self.current_match_index
+            # 移动到上一个匹配项
+            self.current_match_index = (self.current_match_index - 1) % len(self.matches)
+            self.highlight_current_match()
+
+            # 性能监控：计算耗时
+            elapsed_time = (time.time() - start_time) * 1000  # 转换为毫秒
+            if elapsed_time > 10:  # 只记录超过10ms的操作
+                print(f"find_previous 耗时: {elapsed_time:.2f}ms (匹配数: {len(self.matches)})")
+
+    def clear_highlights(self):
+        """清除所有高亮（优化版本）"""
+        if not self.text_edit:
+            return
+
+        # 只有在有匹配项时才清除格式，避免不必要的操作
+        if self.matches:
+            # 暂时禁用更新，提高批量操作性能
+            self.text_edit.setUpdatesEnabled(False)
+
+            try:
+                # 只清除之前高亮的部分，而不是整个文档
+                for match_cursor in self.matches:
+                    temp_cursor = self.text_edit.textCursor()
+                    temp_cursor.setPosition(match_cursor.selectionStart())
+                    temp_cursor.setPosition(match_cursor.selectionEnd(), temp_cursor.MoveMode.KeepAnchor)
+                    temp_cursor.setCharFormat(self.original_format)
+            finally:
+                # 重新启用更新并强制刷新
+                self.text_edit.setUpdatesEnabled(True)
+                self.text_edit.update()
+
+        # 清空匹配列表
+        self.matches = []
+        self.current_match_index = -1
+        self.previous_match_index = -1  # 重置上一个匹配项索引
+
+    def update_ui_state(self, match_count):
+        """更新UI状态"""
+        has_matches = match_count > 0
+        self.prev_button.setEnabled(has_matches)
+        self.next_button.setEnabled(has_matches)
+
+        if match_count == 0:
+            self.result_label.setText("未找到")
+        else:
+            self.result_label.setText(f"1/{match_count}")
+
+    def close_search(self):
+        """关闭搜索"""
+        self.clear_highlights()
+        self.close()
+
+    def keyPressEvent(self, event):
+        """处理键盘事件"""
+        if event.key() == Qt.Key.Key_Escape:
+            self.close_search()
+        elif event.key() == Qt.Key.Key_F3:
+            if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+                self.find_previous()
+            else:
+                self.find_next()
+        else:
+            super().keyPressEvent(event)
+
 class DiaryApp(QMainWindow):
     """
     A simple diary application with a calendar using PyQt6.
@@ -273,6 +593,9 @@ class DiaryApp(QMainWindow):
         # 添加内容变更跟踪
         self.last_saved_content = ""  # 上次保存的内容
         self.content_modified = False  # 内容是否已修改
+
+        # 初始化搜索对话框
+        self.search_dialog = None
 
         self.initUI()
         self.ensure_base_diary_folder() # 确保基础目录存在
@@ -382,6 +705,9 @@ class DiaryApp(QMainWindow):
         # 连接文本变更信号来跟踪内容修改状态
         self.text_edit.textChanged.connect(self.on_text_changed)
 
+        # --- 添加快捷键 ---
+        self.setup_shortcuts()
+
         print("UI初始化完成，所有信号已连接")
 
     def setup_monospace_font(self):
@@ -405,6 +731,68 @@ class DiaryApp(QMainWindow):
         # 确保字体是等宽的
         self.monospace_font.setStyleHint(QFont.StyleHint.TypeWriter)
         print(f"设置等宽字体: {self.monospace_font.family()}")
+
+    def setup_shortcuts(self):
+        """设置键盘快捷键"""
+        # Ctrl+F 页面内搜索
+        find_shortcut = QShortcut(QKeySequence.StandardKey.Find, self)
+        find_shortcut.activated.connect(self.show_in_page_search)
+
+        # F3 查找下一个（如果搜索对话框已打开）
+        find_next_shortcut = QShortcut(QKeySequence(Qt.Key.Key_F3), self)
+        find_next_shortcut.activated.connect(self.find_next_in_search)
+
+        # Shift+F3 查找上一个（如果搜索对话框已打开）
+        find_prev_shortcut = QShortcut(QKeySequence("Shift+F3"), self)
+        find_prev_shortcut.activated.connect(self.find_previous_in_search)
+
+        # Escape 关闭搜索对话框
+        escape_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Escape), self)
+        escape_shortcut.activated.connect(self.close_in_page_search)
+
+        print("快捷键设置完成")
+
+    def show_in_page_search(self):
+        """显示页面内搜索对话框"""
+        # 如果搜索对话框已存在，关闭它
+        if hasattr(self, 'search_dialog') and self.search_dialog:
+            self.search_dialog.close()
+
+        # 创建新的搜索对话框
+        self.search_dialog = InPageSearchDialog(self, self.text_edit)
+
+        # 如果文本编辑器中有选中的文本，将其作为默认搜索词
+        cursor = self.text_edit.textCursor()
+        if cursor.hasSelection():
+            selected_text = cursor.selectedText()
+            self.search_dialog.search_input.setText(selected_text)
+
+        # 显示对话框
+        self.search_dialog.show()
+
+        # 将对话框定位在主窗口的右上角
+        main_geometry = self.geometry()
+        dialog_width = self.search_dialog.width()
+
+        x = main_geometry.x() + main_geometry.width() - dialog_width - 20
+        y = main_geometry.y() + 50
+
+        self.search_dialog.move(x, y)
+
+    def find_next_in_search(self):
+        """在搜索对话框中查找下一个"""
+        if hasattr(self, 'search_dialog') and self.search_dialog and self.search_dialog.isVisible():
+            self.search_dialog.find_next()
+
+    def find_previous_in_search(self):
+        """在搜索对话框中查找上一个"""
+        if hasattr(self, 'search_dialog') and self.search_dialog and self.search_dialog.isVisible():
+            self.search_dialog.find_previous()
+
+    def close_in_page_search(self):
+        """关闭页面内搜索对话框"""
+        if hasattr(self, 'search_dialog') and self.search_dialog and self.search_dialog.isVisible():
+            self.search_dialog.close_search()
 
     def on_text_changed(self):
         """文本内容变更时的处理"""
