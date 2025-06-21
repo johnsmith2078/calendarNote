@@ -6,7 +6,44 @@ from PyQt6.QtWidgets import (
     QLineEdit, QListWidget, QListWidgetItem, QDialog, QLabel, QGridLayout
 )
 from PyQt6.QtCore import QDate, Qt, QDir, QResource, QDirIterator
-from PyQt6.QtGui import QCloseEvent, QFont, QIcon, QTextCharFormat, QColor, QTextDocument
+from PyQt6.QtGui import QCloseEvent, QFont, QIcon, QTextCharFormat, QColor, QTextDocument, QKeySequence
+
+class PlainTextEdit(QTextEdit):
+    """
+    自定义的文本编辑器，强制纯文本粘贴，忽略所有格式
+    """
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        # 设置为纯文本模式，但仍然允许一些基本的文本操作
+        self.setAcceptRichText(False)
+
+    def insertFromMimeData(self, source):
+        """
+        重写粘贴方法，只粘贴纯文本内容，忽略所有格式
+        """
+        if source.hasText():
+            # 获取纯文本内容
+            plain_text = source.text()
+            # 插入纯文本，忽略任何格式
+            self.insertPlainText(plain_text)
+        else:
+            # 如果没有文本内容，调用父类方法
+            super().insertFromMimeData(source)
+
+    def keyPressEvent(self, event):
+        """
+        处理键盘事件，确保Ctrl+V也使用纯文本粘贴
+        """
+        if event.matches(QKeySequence.StandardKey.Paste):
+            # 使用系统剪贴板进行纯文本粘贴
+            clipboard = QApplication.clipboard()
+            mime_data = clipboard.mimeData()
+            if mime_data.hasText():
+                self.insertPlainText(mime_data.text())
+                return
+
+        # 对于其他按键，调用父类方法
+        super().keyPressEvent(event)
 
 class SearchResultItem:
     """表示搜索结果中的一个条目"""
@@ -54,14 +91,30 @@ class SearchDialog(QDialog):
         # 允许列表项显示 HTML 富文本
         self.result_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)  # 禁用水平滚动条
         self.result_list.itemDoubleClicked.connect(self.item_double_clicked)
+        # 设置等宽字体
+        monospace_font = QFont("Consolas", 10)
+        if not monospace_font.exactMatch():
+            monospace_font = QFont()
+            monospace_font.setFamily("monospace")
+            monospace_font.setPointSize(10)
+            monospace_font.setStyleHint(QFont.StyleHint.TypeWriter)
+        self.result_list.setFont(monospace_font)
         layout.addWidget(self.result_list)
-        
+
         # 预览区域
         preview_label = QLabel("预览:", self)
         layout.addWidget(preview_label)
-        
+
         self.preview_text = QTextEdit(self)
         self.preview_text.setReadOnly(True)
+        # 设置等宽字体
+        preview_font = QFont("Consolas", 11)
+        if not preview_font.exactMatch():
+            preview_font = QFont()
+            preview_font.setFamily("monospace")
+            preview_font.setPointSize(11)
+            preview_font.setStyleHint(QFont.StyleHint.TypeWriter)
+        self.preview_text.setFont(preview_font)
         layout.addWidget(self.preview_text)
         
         # 关闭按钮
@@ -148,7 +201,7 @@ class SearchDialog(QDialog):
                 return
                 
             # 处理不区分大小写的搜索
-            keyword_lower = keyword.lower()
+            # keyword_lower = keyword.lower()  # 这个变量在当前实现中未使用
             
             # 创建高亮格式
             highlight_format = self.preview_text.textCursor().charFormat()
@@ -217,10 +270,14 @@ class DiaryApp(QMainWindow):
         # 添加状态栏显示
         self.statusBar().showMessage("就绪")
 
+        # 添加内容变更跟踪
+        self.last_saved_content = ""  # 上次保存的内容
+        self.content_modified = False  # 内容是否已修改
+
         self.initUI()
         self.ensure_base_diary_folder() # 确保基础目录存在
         self.load_entry_for_date(self.current_date)  # Load today's entry initially
-        
+
         # 确保在完全初始化后调用高亮
         print("开始初始化日历高亮...")
         self.update_calendar_highlighting() # 初始化时高亮一次
@@ -233,6 +290,9 @@ class DiaryApp(QMainWindow):
 
         # 设置程序图标 - 通过多种方法尝试加载图标
         self.load_application_icon()
+
+        # 设置全局等宽字体
+        self.setup_monospace_font()
 
         # --- Central Widget and Layout ---
         central_widget = QWidget(self)
@@ -282,9 +342,13 @@ class DiaryApp(QMainWindow):
         self.calendar.setVerticalHeaderFormat(QCalendarWidget.VerticalHeaderFormat.NoVerticalHeader)  # 不显示垂直表头
         self.calendar.setNavigationBarVisible(True)  # 确保导航栏可见
 
-        # 设置日历控件字体
-        calendar_font = QFont()
-        calendar_font.setPointSize(9)  # 设置字体大小
+        # 设置日历控件字体为等宽字体
+        calendar_font = QFont("Consolas", 9)
+        if not calendar_font.exactMatch():
+            calendar_font = QFont()
+            calendar_font.setFamily("monospace")
+            calendar_font.setPointSize(9)
+            calendar_font.setStyleHint(QFont.StyleHint.TypeWriter)
         self.calendar.setFont(calendar_font)
 
         # 设置日历控件大小
@@ -301,11 +365,10 @@ class DiaryApp(QMainWindow):
         v_layout.addWidget(self.calendar)      # Add calendar below the button
 
         # --- Text Edit Widget ---
-        self.text_edit = QTextEdit(self)
+        self.text_edit = PlainTextEdit(self)
         self.text_edit.setPlaceholderText("请在此处输入您的日记内容...")
-        font = self.text_edit.font()
-        font.setPointSize(12)  # Set a slightly larger font
-        self.text_edit.setFont(font)
+        # 设置等宽字体
+        self.text_edit.setFont(self.monospace_font)
 
         # --- Add widgets to main horizontal layout ---
         main_layout.addLayout(v_layout, 1)  # Add vertical layout (button + calendar)
@@ -316,8 +379,57 @@ class DiaryApp(QMainWindow):
         self.calendar.selectionChanged.connect(self.handle_date_change)
         # currentPageChanged fires when the month/year view changes
         self.calendar.currentPageChanged.connect(self.update_calendar_highlighting)
-        
+        # 连接文本变更信号来跟踪内容修改状态
+        self.text_edit.textChanged.connect(self.on_text_changed)
+
         print("UI初始化完成，所有信号已连接")
+
+    def setup_monospace_font(self):
+        """设置全局等宽字体"""
+        # 创建等宽字体，优先使用 Consolas，如果不可用则使用系统默认等宽字体
+        self.monospace_font = QFont("Consolas", 12)
+        if not self.monospace_font.exactMatch():
+            # 如果 Consolas 不可用，尝试其他等宽字体
+            fallback_fonts = ["Courier New", "Monaco", "Menlo", "DejaVu Sans Mono", "Liberation Mono"]
+            for font_name in fallback_fonts:
+                test_font = QFont(font_name, 12)
+                if test_font.exactMatch():
+                    self.monospace_font = test_font
+                    break
+            else:
+                # 如果都不可用，使用系统默认等宽字体
+                self.monospace_font = QFont()
+                self.monospace_font.setFamily("monospace")
+                self.monospace_font.setPointSize(12)
+
+        # 确保字体是等宽的
+        self.monospace_font.setStyleHint(QFont.StyleHint.TypeWriter)
+        print(f"设置等宽字体: {self.monospace_font.family()}")
+
+    def on_text_changed(self):
+        """文本内容变更时的处理"""
+        current_content = self.text_edit.toPlainText()
+        self.content_modified = (current_content != self.last_saved_content)
+
+        # 可选：在窗口标题中显示修改状态
+        if self.content_modified:
+            if not self.windowTitle().endswith(" *"):
+                self.setWindowTitle(self.windowTitle() + " *")
+        else:
+            if self.windowTitle().endswith(" *"):
+                self.setWindowTitle(self.windowTitle()[:-2])
+
+    def is_content_saved(self):
+        """检查当前内容是否已保存"""
+        return not self.content_modified
+
+    def mark_content_as_saved(self):
+        """标记内容为已保存状态"""
+        self.last_saved_content = self.text_edit.toPlainText()
+        self.content_modified = False
+        # 移除窗口标题中的修改标记
+        if self.windowTitle().endswith(" *"):
+            self.setWindowTitle(self.windowTitle()[:-2])
 
     def load_application_icon(self):
         """尝试多种方式加载应用图标"""
@@ -421,12 +533,15 @@ class DiaryApp(QMainWindow):
             print(f"错误: {error_msg}")
             QMessageBox.warning(self, "加载错误 (Load Error)", error_msg)
             self.text_edit.clear()
-            
+
+        # 加载完成后，标记内容为已保存状态
+        self.mark_content_as_saved()
+
         # 确保日历高亮状态正确
         # 检查当前显示的月份是否包含加载的日期
         current_year_shown = self.calendar.yearShown()
         current_month_shown = self.calendar.monthShown()
-        
+
         if date.year() == current_year_shown and date.month() == current_month_shown:
             # 如果日期在当前显示的月份内，更新高亮
             self.update_calendar_highlighting()
@@ -462,7 +577,10 @@ class DiaryApp(QMainWindow):
             with open(filename, 'w', encoding='utf-8') as f:
                 f.write(self.text_edit.toPlainText())  # 保存确切内容
             print(f"保存日记成功: {date.toString('yyyy-MM-dd')} -> {filename}")
-            
+
+            # 保存成功后，标记内容为已保存状态
+            self.mark_content_as_saved()
+
             # 保存后强制更新高亮
             print("保存后更新日历高亮...")
             self.update_calendar_highlighting()
@@ -525,18 +643,40 @@ class DiaryApp(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent):
         """Handle the application closing event."""
+        # 检查内容是否已保存
+        if self.is_content_saved():
+            # 内容已保存，直接关闭
+            print("内容已保存，直接关闭应用")
+            event.accept()
+            return
+
+        # 内容未保存，询问用户
         reply = QMessageBox.question(self, '退出确认 (Confirm Exit)',
-                                     '您想在退出前保存当前日记吗？\n(Save current entry before exiting?)',
+                                     '当前日记内容尚未保存，您想在退出前保存吗？\n(Current diary content is not saved. Save before exiting?)',
                                      QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel,
                                      QMessageBox.StandardButton.Yes)
 
         if reply == QMessageBox.StandardButton.Yes:
-            self.save_entry_for_date(self.current_date)
-            event.accept()  # Proceed with closing
+            # 尝试保存
+            save_success = self.save_entry_for_date(self.current_date)
+            if save_success:
+                event.accept()  # 保存成功，关闭应用
+            else:
+                # 保存失败，询问是否仍要关闭
+                force_close = QMessageBox.question(
+                    self, '保存失败',
+                    '保存失败，是否仍要关闭应用？\n(Save failed. Close anyway?)',
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No
+                )
+                if force_close == QMessageBox.StandardButton.Yes:
+                    event.accept()
+                else:
+                    event.ignore()
         elif reply == QMessageBox.StandardButton.No:
-            event.accept()  # Proceed with closing without saving
+            event.accept()  # 不保存，直接关闭
         else:
-            event.ignore()  # Don't close the window
+            event.ignore()  # 取消关闭
 
     # --- Highlighting Logic ---
     def get_dates_with_entries(self, year: int, month: int) -> set[QDate]:
@@ -802,7 +942,7 @@ class DiaryApp(QMainWindow):
             return False
             
         try:
-            year, month, day = map(int, parts)
+            _, month, day = map(int, parts)
             # 简单校验日期格式
             return 1 <= month <= 12 and 1 <= day <= 31
         except ValueError:
