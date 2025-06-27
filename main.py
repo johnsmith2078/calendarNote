@@ -594,6 +594,15 @@ class DiaryApp(QMainWindow):
         self.last_saved_content = ""  # 上次保存的内容
         self.content_modified = False  # 内容是否已修改
 
+        # 自动保存功能
+        self.auto_save_enabled = True  # 是否启用自动保存
+        self.auto_save_interval = 30000  # 自动保存间隔（毫秒），默认30秒
+        self.auto_save_timer = QTimer()
+        self.auto_save_timer.setSingleShot(False)  # 重复触发
+        self.auto_save_timer.timeout.connect(self.auto_save)
+        self.last_auto_save_time = time.time()  # 上次自动保存时间
+        self.is_auto_saving = False  # 是否正在自动保存
+
         # 初始化搜索对话框
         self.search_dialog = None
 
@@ -648,6 +657,20 @@ class DiaryApp(QMainWindow):
         search_layout.addWidget(self.search_input, 1)  # 分配更多空间给搜索框
         search_layout.addWidget(self.search_button)
         v_layout.addLayout(search_layout)
+        
+        # --- 自动保存状态区域 ---
+        auto_save_layout = QHBoxLayout()
+        self.auto_save_status_label = QLabel("自动保存: 已启用", self)
+        self.auto_save_status_label.setStyleSheet("color: green; font-size: 10px;")
+        
+        self.auto_save_toggle_button = QPushButton("关闭自动保存", self)
+        self.auto_save_toggle_button.setMaximumWidth(100)
+        self.auto_save_toggle_button.clicked.connect(self.toggle_auto_save)
+        
+        auto_save_layout.addWidget(self.auto_save_status_label)
+        auto_save_layout.addStretch()  # 添加弹性空间
+        auto_save_layout.addWidget(self.auto_save_toggle_button)
+        v_layout.addLayout(auto_save_layout)
         
         # 添加今天按钮
         v_layout.addWidget(self.today_button)  # Add today button
@@ -704,6 +727,13 @@ class DiaryApp(QMainWindow):
         self.calendar.currentPageChanged.connect(self.update_calendar_highlighting)
         # 连接文本变更信号来跟踪内容修改状态
         self.text_edit.textChanged.connect(self.on_text_changed)
+        
+        # 启动自动保存定时器
+        if self.auto_save_enabled:
+            self.auto_save_timer.start(self.auto_save_interval)
+            
+        # 更新自动保存UI状态
+        self.update_auto_save_ui()
 
         # --- 添加快捷键 ---
         self.setup_shortcuts()
@@ -753,6 +783,10 @@ class DiaryApp(QMainWindow):
         # Ctrl+S 保存当前日记
         save_shortcut = QShortcut(QKeySequence.StandardKey.Save, self)
         save_shortcut.activated.connect(self.save_current_entry)
+        
+        # Ctrl+Shift+A 切换自动保存
+        auto_save_shortcut = QShortcut(QKeySequence("Ctrl+Shift+A"), self)
+        auto_save_shortcut.activated.connect(self.toggle_auto_save)
 
         print("快捷键设置完成")
 
@@ -797,16 +831,39 @@ class DiaryApp(QMainWindow):
         """关闭页面内搜索对话框"""
         if hasattr(self, 'search_dialog') and self.search_dialog and self.search_dialog.isVisible():
             self.search_dialog.close_search()
+    
+    def toggle_auto_save(self):
+        """切换自动保存状态"""
+        self.set_auto_save_enabled(not self.auto_save_enabled)
+        self.update_auto_save_ui()
+        status = "已启用" if self.auto_save_enabled else "已禁用"
+        self.statusBar().showMessage(f"自动保存{status}", 2000)
+        print(f"自动保存{status}")
+    
+    def update_auto_save_ui(self):
+        """更新自动保存UI状态"""
+        if self.auto_save_enabled:
+            self.auto_save_status_label.setText(f"自动保存: 已启用 ({self.auto_save_interval//1000}秒)")
+            self.auto_save_status_label.setStyleSheet("color: green; font-size: 10px;")
+            self.auto_save_toggle_button.setText("关闭自动保存")
+        else:
+            self.auto_save_status_label.setText("自动保存: 已禁用")
+            self.auto_save_status_label.setStyleSheet("color: red; font-size: 10px;")
+            self.auto_save_toggle_button.setText("启用自动保存")
 
     def on_text_changed(self):
         """文本内容变更时的处理"""
         current_content = self.text_edit.toPlainText()
+        was_modified = self.content_modified
         self.content_modified = (current_content != self.last_saved_content)
 
         # 可选：在窗口标题中显示修改状态
         if self.content_modified:
             if not self.windowTitle().endswith(" *"):
                 self.setWindowTitle(self.windowTitle() + " *")
+            # 如果内容刚开始修改，重置自动保存定时器
+            if not was_modified and self.auto_save_enabled:
+                self.auto_save_timer.start(self.auto_save_interval)
         else:
             if self.windowTitle().endswith(" *"):
                 self.setWindowTitle(self.windowTitle()[:-2])
@@ -990,6 +1047,61 @@ class DiaryApp(QMainWindow):
             self.statusBar().showMessage("日记已保存", 2000)  # 显示2秒
         else:
             self.statusBar().showMessage("保存失败", 2000)
+    
+    def auto_save(self):
+        """自动保存功能"""
+        # 检查是否需要自动保存
+        if not self.auto_save_enabled or not self.content_modified or self.is_auto_saving:
+            return
+            
+        # 避免在用户正在输入时自动保存
+        current_time = time.time()
+        if current_time - self.last_auto_save_time < 5:  # 至少间隔5秒
+            return
+            
+        self.is_auto_saving = True
+        # 临时更新状态标签显示正在保存
+        original_text = self.auto_save_status_label.text()
+        self.auto_save_status_label.setText("自动保存: 保存中...")
+        self.auto_save_status_label.setStyleSheet("color: orange; font-size: 10px;")
+        
+        try:
+            success = self.save_entry_for_date(self.current_date)
+            if success:
+                self.last_auto_save_time = current_time
+                # 显示自动保存成功的提示
+                self.statusBar().showMessage("自动保存完成", 1500)
+                print(f"自动保存成功: {self.current_date.toString('yyyy-MM-dd')}")
+                # 临时显示成功状态
+                self.auto_save_status_label.setText(f"自动保存: 已保存 ({time.strftime('%H:%M:%S')})")
+                self.auto_save_status_label.setStyleSheet("color: blue; font-size: 10px;")
+                # 2秒后恢复正常状态
+                QTimer.singleShot(2000, self.update_auto_save_ui)
+            else:
+                print(f"自动保存失败: {self.current_date.toString('yyyy-MM-dd')}")
+                # 恢复原状态
+                self.update_auto_save_ui()
+        except Exception as e:
+            print(f"自动保存时发生异常: {e}")
+            # 恢复原状态
+            self.update_auto_save_ui()
+        finally:
+            self.is_auto_saving = False
+    
+    def set_auto_save_enabled(self, enabled):
+        """启用或禁用自动保存"""
+        self.auto_save_enabled = enabled
+        if enabled:
+            if self.content_modified:
+                self.auto_save_timer.start(self.auto_save_interval)
+        else:
+            self.auto_save_timer.stop()
+    
+    def set_auto_save_interval(self, interval_seconds):
+        """设置自动保存间隔（秒）"""
+        self.auto_save_interval = interval_seconds * 1000  # 转换为毫秒
+        if self.auto_save_enabled and self.auto_save_timer.isActive():
+            self.auto_save_timer.start(self.auto_save_interval)  # 重启定时器以应用新间隔
 
     def handle_date_change(self):
         """日历日期选择变化时的处理。"""
@@ -1043,6 +1155,10 @@ class DiaryApp(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent):
         """Handle the application closing event."""
+        # 停止自动保存定时器
+        if hasattr(self, 'auto_save_timer'):
+            self.auto_save_timer.stop()
+            
         # 检查内容是否已保存
         if self.is_content_saved():
             # 内容已保存，直接关闭
