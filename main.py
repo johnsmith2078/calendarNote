@@ -750,6 +750,10 @@ class DiaryApp(QMainWindow):
         escape_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Escape), self)
         escape_shortcut.activated.connect(self.close_in_page_search)
 
+        # Ctrl+S 保存当前日记
+        save_shortcut = QShortcut(QKeySequence.StandardKey.Save, self)
+        save_shortcut.activated.connect(self.save_current_entry)
+
         print("快捷键设置完成")
 
     def show_in_page_search(self):
@@ -978,6 +982,14 @@ class DiaryApp(QMainWindow):
             print(f"错误: {error_msg}")
             QMessageBox.warning(self, "保存错误 (Save Error)", error_msg)
             return False
+
+    def save_current_entry(self):
+        """保存当前日期的日记内容（Ctrl+S快捷键调用）"""
+        success = self.save_entry_for_date(self.current_date)
+        if success:
+            self.statusBar().showMessage("日记已保存", 2000)  # 显示2秒
+        else:
+            self.statusBar().showMessage("保存失败", 2000)
 
     def handle_date_change(self):
         """日历日期选择变化时的处理。"""
