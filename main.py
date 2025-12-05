@@ -574,6 +574,7 @@ class DiaryApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.current_date = QDate.currentDate()
+        self.last_system_date = QDate.currentDate()  # 记录系统日期，用于跨日检测
         # 日记存储结构： diary_entries/YYYY/MM/YYYY-MM-DD.txt
         self.diary_folder_base = "diary_entries"
         # self.diary_folder is now dynamically determined based on current_date or calendar view
@@ -614,6 +615,7 @@ class DiaryApp(QMainWindow):
         print("开始初始化日历高亮...")
         self.update_calendar_highlighting() # 初始化时高亮一次
         print("初始化日历高亮完成")
+        self.start_date_change_timer()  # 启动跨日检测
 
     def initUI(self):
         """Initialize the user interface."""
@@ -639,8 +641,8 @@ class DiaryApp(QMainWindow):
         v_layout = QVBoxLayout()  # Create a vertical layout for the button and calendar
 
         # --- Button to Return to Today's Date ---
-        show_date = self.current_date.toString("yyyy-MM-dd")
-        self.today_button = QPushButton(f"今天 ({show_date})", self)
+        self.today_button = QPushButton("", self)
+        self.update_today_button_label(self.last_system_date)
         self.today_button.clicked.connect(self.return_to_today)
 
         # --- 搜索区域 ---
@@ -850,6 +852,39 @@ class DiaryApp(QMainWindow):
             self.auto_save_status_label.setText("自动保存: 已禁用")
             self.auto_save_status_label.setStyleSheet("color: red; font-size: 10px;")
             self.auto_save_toggle_button.setText("启用自动保存")
+
+    def update_today_button_label(self, today_date=None):
+        """更新“今天”按钮显示的日期"""
+        if today_date is None:
+            today_date = QDate.currentDate()
+        self.today_button.setText(f"今天 ({today_date.toString('yyyy-MM-dd')})")
+
+    def start_date_change_timer(self):
+        """启动跨日检测定时器"""
+        self.date_change_timer = QTimer(self)
+        self.date_change_timer.setInterval(60000)  # 每分钟检查一次是否跨日
+        self.date_change_timer.timeout.connect(self.check_for_date_update)
+        self.date_change_timer.start()
+
+    def check_for_date_update(self):
+        """检测系统日期变化，跨过24点时自动切换到新日期"""
+        current_system_date = QDate.currentDate()
+        if current_system_date == self.last_system_date:
+            return
+
+        previous_system_date = self.last_system_date
+        self.last_system_date = current_system_date
+        self.update_today_button_label(current_system_date)
+        print(f"检测到系统日期更新: {previous_system_date.toString('yyyy-MM-dd')} -> {current_system_date.toString('yyyy-MM-dd')}")
+
+        # 如果用户停留在原“今天”，自动切换到新日期
+        if self.current_date == previous_system_date:
+            self.return_to_today()
+        else:
+            # 保证日历高亮能及时更新到新日期所在月份
+            if (current_system_date.year() == self.calendar.yearShown() and
+                current_system_date.month() == self.calendar.monthShown()):
+                self.update_calendar_highlighting()
 
     def on_text_changed(self):
         """文本内容变更时的处理"""
@@ -1141,6 +1176,8 @@ class DiaryApp(QMainWindow):
     def return_to_today(self):
         """Return the calendar to today's date when the 'Today' button is clicked."""
         today_date = QDate.currentDate()
+        self.update_today_button_label(today_date)
+        self.last_system_date = today_date
         if today_date != self.current_date:
             print(f"Returning to today: saving {self.current_date.toString('yyyy-MM-dd')}")
             self.save_entry_for_date(self.current_date) # Save current entry first

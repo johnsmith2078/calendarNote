@@ -9,10 +9,13 @@ def build_with_nuitka():
     if not os.path.exists('icon.ico'):
         print("错误：找不到icon.ico文件，请确保它存在于当前目录")
         return False
+
+    # 优先使用当前解释器，避免在虚拟环境中调用到全局python
+    python_exe = sys.executable or "python"
     
     # Nuitka打包命令
     nuitka_cmd = [
-        "python", "-m", "nuitka",
+        python_exe, "-m", "nuitka",
         "--onefile",
         "--standalone",                 # 创建独立的可执行文件
         "--windows-console-mode=disable",    # 禁用控制台窗口
@@ -31,7 +34,8 @@ def build_with_nuitka():
         print("打包成功！输出目录: dist/")
         return True
     except subprocess.CalledProcessError as e:
-        print(f"打包失败: {e}")
+        print("打包失败: 请确认已安装nuitka，可执行 `uv sync` 或 `uv pip install nuitka` 后重试。")
+        print(e)
         return False
 
 if __name__ == "__main__":
