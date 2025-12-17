@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
     QCheckBox
 )
 from PyQt6.QtCore import QDate, Qt, QDir, QResource, QDirIterator, QTimer
-from PyQt6.QtGui import QCloseEvent, QFont, QIcon, QTextCharFormat, QColor, QTextDocument, QKeySequence, QAction, QShortcut
+from PyQt6.QtGui import QCloseEvent, QFont, QIcon, QTextCharFormat, QColor, QTextDocument, QKeySequence, QAction, QShortcut, QPalette
 
 class PlainTextEdit(QTextEdit):
     """
@@ -588,6 +588,13 @@ class DiaryApp(QMainWindow):
         # 使用更鲜艳的背景色
         self.highlight_format.setBackground(QColor(220, 235, 255))  # 淡蓝色背景
 
+        # 选中且有内容的日期格式：避免被“有内容高亮”覆盖导致看不出当前选中日期
+        palette = QApplication.palette()
+        self.selected_highlight_format = QTextCharFormat()
+        self.selected_highlight_format.setBackground(palette.color(QPalette.ColorRole.Highlight))
+        self.selected_highlight_format.setForeground(palette.color(QPalette.ColorRole.HighlightedText))
+        self.selected_highlight_format.setFontWeight(QFont.Weight.Bold)
+
         # 添加状态栏显示
         self.statusBar().showMessage("就绪")
 
@@ -1161,6 +1168,8 @@ class DiaryApp(QMainWindow):
                     self.calendar.blockSignals(True)  # 阻止信号触发新的事件
                     self.calendar.setSelectedDate(self.current_date)
                     self.calendar.blockSignals(False)  # 恢复信号处理
+                    # 恢复后刷新一次日历格式，避免“选中高亮”残留在新日期上
+                    self.update_calendar_highlighting()
                     return
 
             # 2. 更新当前日期
@@ -1321,6 +1330,7 @@ class DiaryApp(QMainWindow):
         """
         year = self.calendar.yearShown()
         month = self.calendar.monthShown()
+        selected_date = self.calendar.selectedDate()
         
         print(f"开始更新日历高亮：{year}年{month}月")
         
@@ -1343,8 +1353,12 @@ class DiaryApp(QMainWindow):
             
             # 然后为有日记的日期设置高亮
             if current_day in dates_with_entries:
-                self.calendar.setDateTextFormat(current_day, self.highlight_format)
-                print(f"高亮日期: {current_day.toString('yyyy-MM-dd')}")
+                if current_day == selected_date:
+                    self.calendar.setDateTextFormat(current_day, self.selected_highlight_format)
+                    print(f"高亮日期(选中): {current_day.toString('yyyy-MM-dd')}")
+                else:
+                    self.calendar.setDateTextFormat(current_day, self.highlight_format)
+                    print(f"高亮日期: {current_day.toString('yyyy-MM-dd')}")
             
             # 前进到下一天
             current_day = current_day.addDays(1)
