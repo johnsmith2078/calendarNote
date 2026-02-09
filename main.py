@@ -1150,27 +1150,33 @@ class DiaryApp(QMainWindow):
         new_date = self.calendar.selectedDate()
         if new_date != self.current_date:
             print(f"日期变更: {self.current_date.toString('yyyy-MM-dd')} -> {new_date.toString('yyyy-MM-dd')}")
-            
-            # 1. 保存当前日期的日记
-            save_result = self.save_entry_for_date(self.current_date)
-            if not save_result:
-                # 保存失败，询问用户是否仍要切换日期
+
+            if self.content_modified:
                 reply = QMessageBox.question(
-                    self, 
-                    "保存失败", 
-                    f"保存 {self.current_date.toString('yyyy-MM-dd')} 的日记失败。\n是否仍要切换到新日期？",
-                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                    QMessageBox.StandardButton.No
+                    self,
+                    "未保存内容",
+                    "当前日记尚未保存，是否先保存再切换日期？",
+                    QMessageBox.StandardButton.Save
+                    | QMessageBox.StandardButton.Discard
+                    | QMessageBox.StandardButton.Cancel,
+                    QMessageBox.StandardButton.Save,
                 )
-                
-                if reply == QMessageBox.StandardButton.No:
-                    # 用户选择不切换，恢复日历选择
-                    self.calendar.blockSignals(True)  # 阻止信号触发新的事件
+
+                if reply == QMessageBox.StandardButton.Cancel:
+                    self.calendar.blockSignals(True)
                     self.calendar.setSelectedDate(self.current_date)
-                    self.calendar.blockSignals(False)  # 恢复信号处理
-                    # 恢复后刷新一次日历格式，避免“选中高亮”残留在新日期上
+                    self.calendar.blockSignals(False)
                     self.update_calendar_highlighting()
                     return
+
+                if reply == QMessageBox.StandardButton.Save:
+                    save_result = self.save_entry_for_date(self.current_date)
+                    if not save_result:
+                        self.calendar.blockSignals(True)
+                        self.calendar.setSelectedDate(self.current_date)
+                        self.calendar.blockSignals(False)
+                        self.update_calendar_highlighting()
+                        return
 
             # 2. 更新当前日期
             self.current_date = new_date
