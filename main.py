@@ -776,6 +776,8 @@ def load_application_icon(app: QApplication) -> None:
 
 
 def main() -> int:
+    if os.environ.get("QT_QUICK_CONTROLS_STYLE", "").lower() in {"", "windows", "macos", "ios", "android"}:
+        os.environ["QT_QUICK_CONTROLS_STYLE"] = "Basic"
     app = QApplication(sys.argv)
     app.setApplicationDisplayName(TITLE_BASE)
     load_application_icon(app)

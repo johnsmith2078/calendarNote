@@ -393,12 +393,12 @@ ApplicationWindow {
     }
 
     Shortcut {
-        sequence: StandardKey.Save
+        sequences: [StandardKey.Save]
         onActivated: root.backendSafe.saveCurrentEntry()
     }
 
     Shortcut {
-        sequence: StandardKey.Find
+        sequences: [StandardKey.Find]
         onActivated: root.openInPageSearch()
     }
 
