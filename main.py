@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import html
 import os
+import re
 import sys
 import time
 from dataclasses import dataclass
@@ -128,6 +130,7 @@ class DiaryBackend(QObject):
     searchResultCountTextChanged = pyqtSignal()
     searchPreviewContentChanged = pyqtSignal()
     searchPreviewDateChanged = pyqtSignal()
+    searchPreviewRichTextChanged = pyqtSignal()
     calendarVersionChanged = pyqtSignal()
     searchCompleted = pyqtSignal(bool, str)
     windowCloseApproved = pyqtSignal()
@@ -151,6 +154,7 @@ class DiaryBackend(QObject):
         self._search_result_count_text = "找到 0 个结果"
         self._search_preview_content = ""
         self._search_preview_date = ""
+        self._search_keyword = ""
         self._calendar_version = 0
         self._month_entry_cache: dict[tuple[int, int], set[str]] = {}
         self._search_results_model = SearchResultModel(self)
@@ -236,6 +240,10 @@ class DiaryBackend(QObject):
     @pyqtProperty(str, notify=searchPreviewDateChanged)
     def searchPreviewDate(self) -> str:
         return self._search_preview_date
+
+    @pyqtProperty(str, notify=searchPreviewRichTextChanged)
+    def searchPreviewRichText(self) -> str:
+        return self._build_highlighted_preview_html(self._search_preview_content, self._search_keyword)
 
     @pyqtProperty(int, notify=calendarVersionChanged)
     def calendarVersion(self) -> int:
@@ -337,6 +345,8 @@ class DiaryBackend(QObject):
             QMessageBox.information(None, "搜索提示", "请输入要搜索的关键词")
             return
 
+        self._set_search_keyword(keyword)
+
         if not self.save_entry_for_date(self._current_date, status_text=""):
             return
 
@@ -375,6 +385,7 @@ class DiaryBackend(QObject):
             if self._search_preview_content:
                 self._search_preview_content = ""
                 self.searchPreviewContentChanged.emit()
+                self.searchPreviewRichTextChanged.emit()
             if self._search_preview_date:
                 self._search_preview_date = ""
                 self.searchPreviewDateChanged.emit()
@@ -385,6 +396,7 @@ class DiaryBackend(QObject):
         if content != self._search_preview_content:
             self._search_preview_content = content
             self.searchPreviewContentChanged.emit()
+            self.searchPreviewRichTextChanged.emit()
         if date_text != self._search_preview_date:
             self._search_preview_date = date_text
             self.searchPreviewDateChanged.emit()
@@ -510,6 +522,12 @@ class DiaryBackend(QObject):
             return
         self._search_busy = busy
         self.searchBusyChanged.emit()
+
+    def _set_search_keyword(self, keyword: str) -> None:
+        if keyword == self._search_keyword:
+            return
+        self._search_keyword = keyword
+        self.searchPreviewRichTextChanged.emit()
 
     def _bump_calendar_version(self) -> None:
         self._calendar_version += 1
@@ -761,6 +779,38 @@ class DiaryBackend(QObject):
         if end < len(content):
             snippet += "..."
         return snippet
+
+    def _build_highlighted_preview_html(self, content: str, keyword: str) -> str:
+        if not content:
+            return ""
+
+        pattern = re.compile(re.escape(keyword), re.IGNORECASE) if keyword else None
+        segments: list[str] = []
+        last_end = 0
+
+        if pattern is not None:
+            for match in pattern.finditer(content):
+                start, end = match.span()
+                if start > last_end:
+                    segments.append(self._escape_preview_html(content[last_end:start]))
+                segments.append(
+                    "<span style=\"background-color:#FDE68A;color:#7C2D12;font-weight:600;\">"
+                    f"{self._escape_preview_html(content[start:end])}"
+                    "</span>"
+                )
+                last_end = end
+
+        if last_end < len(content):
+            segments.append(self._escape_preview_html(content[last_end:]))
+
+        body = "".join(segments) if segments else self._escape_preview_html(content)
+        return f"<div style=\"margin:0;\">{body}</div>"
+
+    def _escape_preview_html(self, text: str) -> str:
+        escaped = html.escape(text.replace("\t", "    "))
+        while "  " in escaped:
+            escaped = escaped.replace("  ", "&nbsp; ")
+        return escaped.replace("\n", "<br/>")
 
 
 def resolve_runtime_path(*parts: str) -> Path:

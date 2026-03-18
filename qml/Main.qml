@@ -55,6 +55,7 @@ ApplicationWindow {
         property var searchResultsModel: null
         property string searchPreviewDate: ""
         property string searchPreviewContent: ""
+        property string searchPreviewRichText: ""
 
         function preloadMonth(year, month) {}
         function requestWindowClose() {}
@@ -1055,12 +1056,20 @@ ApplicationWindow {
 
                             TextArea {
                                 readOnly: true
-                                text: root.backendSafe.searchPreviewContent
+                                text: root.backendSafe.searchPreviewRichText
                                 wrapMode: TextArea.Wrap
                                 selectByMouse: true
-                                textFormat: TextEdit.PlainText
+                                persistentSelection: true
+                                textFormat: TextEdit.RichText
+                                color: root.primaryColor
+                                selectionColor: "#D6E4FF"
+                                selectedTextColor: root.primaryColor
                                 font.family: root.backendSafe.monospaceFamily
                                 font.pixelSize: 14
+                                leftPadding: 4
+                                rightPadding: 4
+                                topPadding: 2
+                                bottomPadding: 8
                                 background: null
                             }
                         }
