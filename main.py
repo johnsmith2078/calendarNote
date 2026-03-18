@@ -275,9 +275,13 @@ class DiaryBackend(QObject):
             return
         self._select_date(target)
 
-    @pyqtSlot()
-    def returnToToday(self) -> None:
-        self._select_date(QDate.currentDate())
+    @pyqtSlot(result=bool)
+    def returnToToday(self) -> bool:
+        today = QDate.currentDate()
+        if today == self._current_date:
+            self._ensure_month_cache(today.year(), today.month())
+            return True
+        return self._select_date(today)
 
     @pyqtSlot()
     def requestWindowClose(self) -> None:

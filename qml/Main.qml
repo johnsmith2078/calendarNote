@@ -62,7 +62,7 @@ ApplicationWindow {
         function toggleAutoSave() {}
         function selectSearchResult(index) {}
         function performGlobalSearch(text) {}
-        function returnToToday() {}
+        function returnToToday() { return false }
         function updateContent(text) {}
         function openSearchResult(index) {}
         function selectDate(isoDate) {}
@@ -272,13 +272,16 @@ ApplicationWindow {
     }
 
     function openInPageSearch() {
-        if (!inPageSearchPopup.visible) {
-            const seed = editor.selectedText && editor.selectedText.length > 0 ? editor.selectedText : findField.text
-            if (seed && seed.length > 0) {
-                findField.text = seed
-            }
-            inPageSearchPopup.open()
+        if (inPageSearchPopup.visible) {
+            inPageSearchPopup.close()
+            return
         }
+
+        const seed = editor.selectedText && editor.selectedText.length > 0 ? editor.selectedText : findField.text
+        if (seed && seed.length > 0) {
+            findField.text = seed
+        }
+        inPageSearchPopup.open()
         findField.forceActiveFocus()
         findField.selectAll()
         inPageSearchPopup.refreshMatches()
@@ -574,7 +577,10 @@ ApplicationWindow {
                     text: root.backendSafe.todayLabel
                     font.pixelSize: 14
                     font.bold: true
-                    onClicked: root.backendSafe.returnToToday()
+                    onClicked: {
+                        if (root.backendSafe.returnToToday())
+                            root.syncShownMonth(root.backendSafe.currentDate)
+                    }
                 }
 
                 ColumnLayout {
