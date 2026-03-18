@@ -966,6 +966,7 @@ ApplicationWindow {
                         onCurrentIndexChanged: root.backendSafe.selectSearchResult(currentIndex)
 
                         delegate: Rectangle {
+                            required property int index
                             required property string dateLabel
                             required property string matchText
                             width: ListView.view.width
@@ -976,6 +977,7 @@ ApplicationWindow {
 
                             MouseArea {
                                 anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
                                 onClicked: searchResultsList.currentIndex = index
                                 onDoubleClicked: {
                                     searchResultsList.currentIndex = index
