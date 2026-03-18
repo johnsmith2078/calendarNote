@@ -1070,19 +1070,44 @@ ApplicationWindow {
         focus: true
         closePolicy: Popup.CloseOnEscape
         padding: 0
-        width: Math.min(420, editorCard.width - 32)
-        height: 154
-        x: editorCard.x + editorCard.width - width - 18
-        y: root.header.height + 18
+        width: Math.max(320, Math.min(420, editorCard.width - 32))
+        height: 180
         property var matches: []
         property int currentMatchIndex: -1
         property int matchCount: matches.length
+        property bool positionInitialized: false
+        property real dragStartSceneX: 0
+        property real dragStartSceneY: 0
+        property real dragStartPopupX: 0
+        property real dragStartPopupY: 0
+
+        function resetPosition() {
+            x = Math.max(root.pagePadding,
+                         Math.min(editorCard.x + editorCard.width - width - 18,
+                                  root.width - width - root.pagePadding))
+            y = Math.max(root.pagePadding, root.header.height + 18)
+            positionInitialized = true
+        }
+
+        function clampPosition() {
+            x = Math.max(root.pagePadding,
+                         Math.min(x, root.width - width - root.pagePadding))
+            y = Math.max(root.pagePadding,
+                         Math.min(y, root.height - height - root.pagePadding))
+        }
 
         function refreshMatches() {
+            if (!visible) {
+                matches = []
+                currentMatchIndex = -1
+                return
+            }
+
             const query = findField.text
             if (!query || query.length === 0) {
                 matches = []
                 currentMatchIndex = -1
+                editor.deselect()
                 return
             }
 
@@ -1101,24 +1126,34 @@ ApplicationWindow {
 
             matches = found
             if (matches.length > 0) {
-                selectMatch(0)
+                const nextIndex = currentMatchIndex >= 0 && currentMatchIndex < matches.length
+                    ? currentMatchIndex
+                    : 0
+                selectMatch(nextIndex)
             } else {
                 currentMatchIndex = -1
+                editor.deselect()
             }
         }
 
         function selectMatch(index) {
             if (index < 0 || index >= matches.length)
                 return
+
             currentMatchIndex = index
             const match = matches[index]
+            const findCursorPosition = findField.cursorPosition
+
             editor.forceActiveFocus()
-            editor.select(match.start, match.end)
-            editor.cursorPosition = match.end
-            const rect = editor.positionToRectangle(match.start)
-            const targetY = Math.max(0, Math.min(rect.y - editorFlick.height * 0.35,
-                                                 editorFlick.contentHeight - editorFlick.height))
-            editorFlick.contentY = targetY
+            editor.cursorPosition = match.start
+            editor.moveCursorSelection(match.end, TextEdit.SelectCharacters)
+
+            Qt.callLater(function() {
+                if (!inPageSearchPopup.visible)
+                    return
+                findField.forceActiveFocus()
+                findField.cursorPosition = Math.min(findCursorPosition, findField.text.length)
+            })
         }
 
         function findNext() {
@@ -1134,9 +1169,19 @@ ApplicationWindow {
         }
 
         onOpened: {
+            if (!positionInitialized)
+                resetPosition()
+            clampPosition()
             findField.forceActiveFocus()
             findField.selectAll()
             refreshMatches()
+        }
+
+        onClosed: {
+            matches = []
+            currentMatchIndex = -1
+            editor.deselect()
+            editor.forceActiveFocus()
         }
 
         background: Rectangle {
@@ -1149,9 +1194,62 @@ ApplicationWindow {
         }
 
         contentItem: ColumnLayout {
+            id: popupContent
             anchors.fill: parent
-            anchors.margins: 16
+            anchors.margins: 14
             spacing: 12
+
+            Rectangle {
+                Layout.fillWidth: true
+                implicitHeight: 34
+                radius: 12
+                color: "#FFF4EA"
+                border.color: "#F1D8C8"
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 12
+                    anchors.rightMargin: 12
+                    spacing: 8
+
+                    Label {
+                        text: "页面内查找"
+                        color: root.primaryColor
+                        font.pixelSize: 13
+                        font.bold: true
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        text: "拖动此处移动"
+                        color: root.secondaryTextColor
+                        font.pixelSize: 12
+                        horizontalAlignment: Text.AlignRight
+                    }
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    acceptedButtons: Qt.LeftButton
+                    preventStealing: true
+                    cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+                    onPressed: function(mouse) {
+                        const point = mapToItem(null, mouse.x, mouse.y)
+                        inPageSearchPopup.dragStartSceneX = point.x
+                        inPageSearchPopup.dragStartSceneY = point.y
+                        inPageSearchPopup.dragStartPopupX = inPageSearchPopup.x
+                        inPageSearchPopup.dragStartPopupY = inPageSearchPopup.y
+                    }
+                    onPositionChanged: function(mouse) {
+                        if (!(mouse.buttons & Qt.LeftButton))
+                            return
+                        const point = mapToItem(null, mouse.x, mouse.y)
+                        inPageSearchPopup.x = inPageSearchPopup.dragStartPopupX + point.x - inPageSearchPopup.dragStartSceneX
+                        inPageSearchPopup.y = inPageSearchPopup.dragStartPopupY + point.y - inPageSearchPopup.dragStartSceneY
+                        inPageSearchPopup.clampPosition()
+                    }
+                }
+            }
 
             RowLayout {
                 Layout.fillWidth: true
