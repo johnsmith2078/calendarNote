@@ -594,6 +594,7 @@ class DiaryApp(QMainWindow):
         self.selected_highlight_format.setBackground(palette.color(QPalette.ColorRole.Highlight))
         self.selected_highlight_format.setForeground(palette.color(QPalette.ColorRole.HighlightedText))
         self.selected_highlight_format.setFontWeight(QFont.Weight.Bold)
+        self.last_selected_highlighted_date = QDate()  # 记录上次应用“选中高亮”的日期，便于跨月清理残留
 
         # 添加状态栏显示
         self.statusBar().showMessage("就绪")
@@ -1292,6 +1293,31 @@ class DiaryApp(QMainWindow):
         self.check_old_directory_entries(year, month, dates)
             
         return dates
+
+    def date_has_entry(self, date: QDate) -> bool:
+        """判断某个日期是否存在非空日记内容（不触发旧文件迁移）。"""
+        if not date or not date.isValid():
+            return False
+
+        year_str = date.toString("yyyy")
+        month_str = date.toString("MM")
+        day_str = date.toString("yyyy-MM-dd")
+
+        new_file = os.path.join(self.diary_folder_base, year_str, month_str, day_str + ".txt")
+        if os.path.isfile(new_file):
+            try:
+                return os.path.getsize(new_file) > 0
+            except OSError:
+                return False
+
+        old_file = os.path.join(self.old_diary_folder, day_str + ".txt")
+        if os.path.isfile(old_file):
+            try:
+                return os.path.getsize(old_file) > 0
+            except OSError:
+                return False
+
+        return False
         
     def check_old_directory_entries(self, year: int, month: int, dates_set: set):
         """
@@ -1324,44 +1350,80 @@ class DiaryApp(QMainWindow):
         except Exception as e:
             print(f"列出旧目录 {self.old_diary_folder} 内容时出错: {e}")
 
-    def update_calendar_highlighting(self):
+    def update_calendar_highlighting(self, year=None, month=None):
         """
         为日历中有日记内容的日期应用彩色高亮显示。
         """
-        year = self.calendar.yearShown()
-        month = self.calendar.monthShown()
+        if year is None:
+            year = self.calendar.yearShown()
+        if month is None:
+            month = self.calendar.monthShown()
         selected_date = self.calendar.selectedDate()
+
+        # 清理上一次“选中且有内容”的日期高亮（它可能不在当前可见网格里）
+        if (
+            hasattr(self, "last_selected_highlighted_date")
+            and self.last_selected_highlighted_date.isValid()
+            and self.last_selected_highlighted_date != selected_date
+        ):
+            previous_date = self.last_selected_highlighted_date
+            if self.date_has_entry(previous_date):
+                self.calendar.setDateTextFormat(previous_date, self.highlight_format)
+            else:
+                self.calendar.setDateTextFormat(previous_date, QTextCharFormat())
+            self.last_selected_highlighted_date = QDate()
         
         print(f"开始更新日历高亮：{year}年{month}月")
-        
-        # 获取有日记内容的日期集合
+
+        # 获取本月有日记内容的日期集合
         dates_with_entries = self.get_dates_with_entries(year, month)
         print(f"找到 {len(dates_with_entries)} 个有日记的日期")
-        
+
         if dates_with_entries:
             print(f"有日记的日期: {[date.toString('yyyy-MM-dd') for date in dates_with_entries]}")
-        
-        # 首先清除当前月份所有日期的格式
-        # 这可以解决有些日期高亮不会被清除的问题
+
+        # 先清除本月日期格式，再重新应用高亮（保留其它月份日期已有格式）
         default_format = QTextCharFormat()
+        applied_selected_highlight = False
         
-        # 迭代当前显示月份的所有天
         current_day = QDate(year, month, 1)
         while current_day.month() == month and current_day.year() == year:
-            # 首先重置所有日期为默认格式
             self.calendar.setDateTextFormat(current_day, default_format)
-            
-            # 然后为有日记的日期设置高亮
+
             if current_day in dates_with_entries:
                 if current_day == selected_date:
                     self.calendar.setDateTextFormat(current_day, self.selected_highlight_format)
                     print(f"高亮日期(选中): {current_day.toString('yyyy-MM-dd')}")
+                    applied_selected_highlight = True
                 else:
                     self.calendar.setDateTextFormat(current_day, self.highlight_format)
                     print(f"高亮日期: {current_day.toString('yyyy-MM-dd')}")
-            
-            # 前进到下一天
+
             current_day = current_day.addDays(1)
+
+        # 补充：为日历网格中显示的“其它月份日期”(灰色)应用内容高亮（不主动清除无内容日期，避免误清）
+        first_day_of_week = self.calendar.firstDayOfWeek().value
+        first_of_month = QDate(year, month, 1)
+        leading_days = (first_of_month.dayOfWeek() - first_day_of_week + 7) % 7
+        grid_start = first_of_month.addDays(-leading_days)
+
+        for offset in range(42):
+            day = grid_start.addDays(offset)
+            if day.year() == year and day.month() == month:
+                continue
+            if not self.date_has_entry(day):
+                continue
+
+            if day == selected_date:
+                self.calendar.setDateTextFormat(day, self.selected_highlight_format)
+                print(f"高亮日期(选中): {day.toString('yyyy-MM-dd')}")
+                applied_selected_highlight = True
+            else:
+                self.calendar.setDateTextFormat(day, self.highlight_format)
+                print(f"高亮日期: {day.toString('yyyy-MM-dd')}")
+
+        if applied_selected_highlight:
+            self.last_selected_highlighted_date = selected_date
         
         # 强制刷新日历显示
         self.calendar.updateCells()
