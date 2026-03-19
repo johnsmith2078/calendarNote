@@ -11,26 +11,33 @@ ApplicationWindow {
     minimumHeight: 620
     title: root.backendSafe.windowTitle
     color: backgroundColor
+    font.family: root.uiFontFamily
 
-    property color backgroundColor: "#FFF8F4"
-    property color surfaceColor: "#FFFDFC"
-    property color elevatedColor: "#FFF2E8"
-    property color borderColor: "#EFDCCD"
-    property color primaryColor: "#2B211D"
-    property color secondaryTextColor: "#7A625A"
-    property color accentColor: "#F59E0B"
-    property color accentSoftColor: "#FFE6CC"
-    property color successColor: "#166534"
-    property color dangerColor: "#B91C1C"
-    property color mutedChipColor: "#F8E7DA"
-    property color skyColor: "#60A5FA"
-    property color skySoftColor: "#DBEAFE"
-    property color mintColor: "#34D399"
-    property color mintSoftColor: "#D1FAE5"
-    property color plumColor: "#A78BFA"
-    property color plumSoftColor: "#EDE9FE"
-    property color coralColor: "#FB7185"
-    property color coralSoftColor: "#FFE4E8"
+    property color backgroundColor: "#FAFAFA"
+    property color surfaceColor: "#FFFFFF"
+    property color elevatedColor: "#FCFCFD"
+    property color mutedSurfaceColor: "#F4F4F5"
+    property color borderColor: "#E4E4E7"
+    property color inputColor: "#E4E4E7"
+    property color primaryColor: "#18181B"
+    property color primaryForegroundColor: "#FAFAFA"
+    property color secondaryTextColor: "#71717A"
+    property color mutedTextColor: "#A1A1AA"
+    property color accentColor: "#18181B"
+    property color accentSoftColor: "#F4F4F5"
+    property color accentHoverColor: "#E4E4E7"
+    property color ringColor: "#A1A1AA"
+    property color ringSoftColor: "#F4F4F5"
+    property color successColor: "#15803D"
+    property color successSoftColor: "#F0FDF4"
+    property color dangerColor: "#DC2626"
+    property color dangerSoftColor: "#FEF2F2"
+    property color infoColor: "#2563EB"
+    property color infoSoftColor: "#EFF6FF"
+    property real largeRadius: 20
+    property real mediumRadius: 16
+    property real smallRadius: 10
+    property string uiFontFamily: Qt.platform.os === "windows" ? "Microsoft YaHei UI" : "Sans Serif"
     property bool wideLayout: width >= 1040 && width / Math.max(height, 1) >= 1.1
     property real pagePadding: Math.max(18, Math.min(width, height) * 0.022)
     property real gap: wideLayout ? 20 : 16
@@ -78,122 +85,73 @@ ApplicationWindow {
         color: root.backgroundColor
     }
 
-    Rectangle {
-        z: -1
-        width: Math.max(220, root.width * 0.28)
-        height: width
-        radius: width / 2
-        x: root.width - width * 0.72
-        y: -height * 0.28
-        color: root.accentSoftColor
-        opacity: 0.45
-    }
-
-    Rectangle {
-        z: -1
-        width: Math.max(240, root.width * 0.24)
-        height: width
-        radius: width / 2
-        x: -width * 0.22
-        y: root.height - height * 0.62
-        color: root.skySoftColor
-        opacity: 0.32
-    }
-
-    Rectangle {
-        z: -1
-        width: Math.max(180, root.width * 0.18)
-        height: width
-        radius: width / 2
-        x: root.width * 0.48
-        y: root.height - height * 0.38
-        color: root.plumSoftColor
-        opacity: 0.28
-    }
-
     component AppButton: Button {
         id: control
-        property string tone: "neutral"
-        readonly property color toneFill: tone === "accent"
-            ? root.accentSoftColor
-            : tone === "sky"
-                ? root.skySoftColor
-                : tone === "mint"
-                    ? root.mintSoftColor
-                    : tone === "plum"
-                        ? root.plumSoftColor
-                        : tone === "coral"
-                            ? root.coralSoftColor
-                            : "#FFFFFF"
-        readonly property color toneHoverFill: tone === "accent"
-            ? "#FFD9B3"
-            : tone === "sky"
-                ? "#CDE1FF"
-                : tone === "mint"
-                    ? "#C0F3DA"
-                    : tone === "plum"
-                        ? "#E4DEFF"
-                        : tone === "coral"
-                            ? "#FFD6DE"
-                            : "#FFF7F1"
-        readonly property color toneStroke: tone === "accent"
-            ? "#F5B35D"
-            : tone === "sky"
-                ? "#A8CAFF"
-                : tone === "mint"
-                    ? "#9BE6C1"
-                    : tone === "plum"
-                        ? "#C8BAFF"
-                        : tone === "coral"
-                            ? "#F9A8B4"
-                            : root.borderColor
-        readonly property color toneText: tone === "accent"
-            ? "#B45309"
-            : tone === "sky"
-                ? "#2563EB"
-                : tone === "mint"
-                    ? "#0F9F6E"
-                    : tone === "plum"
-                        ? "#7C3AED"
-                        : tone === "coral"
-                            ? "#E11D48"
-                            : root.primaryColor
-        implicitHeight: 42
-        leftPadding: 16
-        rightPadding: 16
-        topPadding: 10
-        bottomPadding: 10
+        property string tone: "outline"
+        readonly property color toneFill: tone === "default"
+            ? root.primaryColor
+            : tone === "destructive"
+                ? root.dangerColor
+                : tone === "secondary"
+                    ? root.accentSoftColor
+                : tone === "ghost"
+                    ? "transparent"
+                    : root.surfaceColor
+        readonly property color toneHoverFill: tone === "default"
+            ? "#27272A"
+            : tone === "destructive"
+                ? "#B91C1C"
+                : tone === "secondary"
+                    ? root.accentHoverColor
+                : tone === "ghost"
+                    ? root.accentSoftColor
+                    : root.mutedSurfaceColor
+        readonly property color toneStroke: tone === "default"
+            ? root.primaryColor
+            : tone === "destructive"
+                ? root.dangerColor
+                : tone === "ghost"
+                    ? "transparent"
+                    : root.borderColor
+        readonly property color toneText: tone === "default" || tone === "destructive"
+            ? root.primaryForegroundColor
+            : root.primaryColor
+        implicitHeight: 40
+        leftPadding: 14
+        rightPadding: 14
+        topPadding: 9
+        bottomPadding: 9
         font.pixelSize: 13
         font.bold: true
+        font.family: root.uiFontFamily
         hoverEnabled: true
 
         contentItem: Text {
             text: control.text
-            color: control.enabled ? control.toneText : "#A8A29E"
+            color: control.enabled ? control.toneText : root.mutedTextColor
             font: control.font
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
             elide: Text.ElideRight
         }
 
-        background: Rectangle {
-            radius: 12
-            gradient: Gradient {
-                GradientStop {
-                    position: 0.0
-                    color: !control.enabled
-                        ? "#F5F5F4"
-                        : (control.down ? Qt.darker(control.toneFill, 1.02) : Qt.lighter(control.toneFill, 1.08))
-                }
-                GradientStop {
-                    position: 1.0
-                    color: !control.enabled
-                        ? "#F5F5F4"
-                        : (control.hovered ? control.toneHoverFill : Qt.darker(control.toneFill, 1.01))
-                }
+        background: Item {
+            Rectangle {
+                anchors.fill: parent
+                radius: root.smallRadius
+                color: control.activeFocus ? root.ringSoftColor : "transparent"
             }
-            border.color: control.activeFocus ? root.accentColor : control.toneStroke
-            border.width: control.activeFocus ? 1.5 : 1
+
+            Rectangle {
+                anchors.fill: parent
+                anchors.margins: control.activeFocus ? 1 : 0
+                radius: Math.max(0, root.smallRadius - (control.activeFocus ? 1 : 0))
+                color: !control.enabled
+                    ? root.mutedSurfaceColor
+                    : (control.down ? Qt.darker(control.toneFill, 1.06) : (control.hovered ? control.toneHoverFill : control.toneFill))
+                border.color: control.activeFocus ? root.ringColor : control.toneStroke
+                border.width: tone === "ghost" && !control.activeFocus ? 0 : 1
+            }
         }
     }
 
@@ -206,19 +164,27 @@ ApplicationWindow {
         bottomPadding: 0
         color: root.primaryColor
         font.pixelSize: 13
-        placeholderTextColor: "#78716C"
-        selectedTextColor: "#FAFAF9"
+        font.family: root.uiFontFamily
+        placeholderTextColor: root.secondaryTextColor
+        selectedTextColor: root.primaryForegroundColor
         selectionColor: root.primaryColor
         verticalAlignment: TextInput.AlignVCenter
 
-        background: Rectangle {
-            radius: 12
-            gradient: Gradient {
-                GradientStop { position: 0.0; color: "#FFFFFF" }
-                GradientStop { position: 1.0; color: "#FFF7F1" }
+        background: Item {
+            Rectangle {
+                anchors.fill: parent
+                radius: root.smallRadius
+                color: control.activeFocus ? root.ringSoftColor : "transparent"
             }
-            border.color: control.activeFocus ? root.accentColor : "#E8D6CA"
-            border.width: control.activeFocus ? 1.5 : 1
+
+            Rectangle {
+                anchors.fill: parent
+                anchors.margins: control.activeFocus ? 1 : 0
+                radius: Math.max(0, root.smallRadius - (control.activeFocus ? 1 : 0))
+                color: root.surfaceColor
+                border.color: control.activeFocus ? root.ringColor : root.inputColor
+                border.width: 1
+            }
         }
     }
 
@@ -233,6 +199,7 @@ ApplicationWindow {
         hoverEnabled: false
         spacing: 10
         font.pixelSize: 13
+        font.family: root.uiFontFamily
 
         indicator: Rectangle {
             x: 0
@@ -240,16 +207,17 @@ ApplicationWindow {
             implicitWidth: 20
             implicitHeight: 20
             radius: 6
-            color: control.checked ? root.skyColor : "#FFFFFF"
-            border.color: control.checked ? root.skyColor : root.borderColor
+            color: control.checked ? root.primaryColor : root.surfaceColor
+            border.color: control.checked ? root.primaryColor : root.inputColor
             border.width: 1
 
             Text {
                 anchors.centerIn: parent
                 text: control.checked ? "✓" : ""
-                color: "#FAFAF9"
+                color: root.primaryForegroundColor
                 font.pixelSize: 12
                 font.bold: true
+                font.family: root.uiFontFamily
             }
         }
 
@@ -262,6 +230,45 @@ ApplicationWindow {
         }
 
         background: Item {
+        }
+    }
+
+    component AppBadge: Rectangle {
+        id: control
+        property string tone: "secondary"
+        property alias text: badgeLabel.text
+        implicitHeight: 30
+        implicitWidth: badgeLabel.implicitWidth + 20
+        radius: 999
+        color: tone === "success"
+            ? root.successSoftColor
+            : tone === "destructive"
+                ? root.dangerSoftColor
+                : tone === "info"
+                    ? root.infoSoftColor
+                    : root.accentSoftColor
+        border.color: tone === "success"
+            ? "#BBF7D0"
+            : tone === "destructive"
+                ? "#FECACA"
+                : tone === "info"
+                    ? "#BFDBFE"
+                    : root.borderColor
+        border.width: 1
+
+        Label {
+            id: badgeLabel
+            anchors.centerIn: parent
+            color: tone === "success"
+                ? root.successColor
+                : tone === "destructive"
+                    ? root.dangerColor
+                    : tone === "info"
+                        ? root.infoColor
+                        : root.primaryColor
+            font.pixelSize: 12
+            font.bold: true
+            font.family: root.uiFontFamily
         }
     }
 
@@ -303,15 +310,23 @@ ApplicationWindow {
     }
 
     header: Rectangle {
-        color: "transparent"
-        implicitHeight: 82
+        color: root.backgroundColor
+        implicitHeight: 88
+
+        Rectangle {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            height: 1
+            color: root.borderColor
+        }
 
         RowLayout {
             anchors.fill: parent
             anchors.leftMargin: root.pagePadding
             anchors.rightMargin: root.pagePadding
-            anchors.topMargin: 18
-            anchors.bottomMargin: 10
+            anchors.topMargin: 16
+            anchors.bottomMargin: 12
             spacing: 16
 
             ColumnLayout {
@@ -320,78 +335,67 @@ ApplicationWindow {
 
                 Label {
                     text: "日历笔记本"
-                    font.pixelSize: 28
+                    font.pixelSize: 26
                     font.bold: true
+                    font.family: root.uiFontFamily
                     color: root.primaryColor
                 }
 
                 Label {
                     text: root.wideLayout
-                        ? "QML 自适应双栏布局：左侧导航与检索，右侧沉浸式编辑。"
-                        : "QML 自适应纵向布局：在窄窗口下优先保证日历与编辑器可读性。"
+                        ? "采用 shadcn 风格的中性色卡片布局：左侧导航与检索，右侧专注编辑。"
+                        : "采用 shadcn 风格的纵向紧凑布局，在窄窗口下优先保证信息密度与可读性。"
                     color: root.secondaryTextColor
                     font.pixelSize: 13
+                    font.family: root.uiFontFamily
                     wrapMode: Text.Wrap
                 }
             }
 
-            Rectangle {
-                radius: 999
-                color: root.backendSafe.saveStateText === "已保存" ? "#ECFDF3" : "#FEF2F2"
-                border.color: root.backendSafe.saveStateText === "已保存" ? "#BBF7D0" : "#FECACA"
-                implicitHeight: 40
-                implicitWidth: statusChipLabel.implicitWidth + 28
-
-                Label {
-                    id: statusChipLabel
-                    anchors.centerIn: parent
-                    text: root.backendSafe.saveStateText
-                    color: root.backendSafe.saveStateText === "已保存" ? root.successColor : root.dangerColor
-                    font.pixelSize: 13
-                    font.bold: true
-                }
+            AppBadge {
+                tone: root.backendSafe.saveStateText === "已保存" ? "success" : "destructive"
+                text: root.backendSafe.saveStateText
             }
         }
     }
 
     footer: Rectangle {
-        color: "transparent"
-        implicitHeight: 52
+        color: root.backgroundColor
+        implicitHeight: 56
 
         Rectangle {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            height: 1
+            color: root.borderColor
+        }
+
+        RowLayout {
             anchors.fill: parent
             anchors.leftMargin: root.pagePadding
             anchors.rightMargin: root.pagePadding
+            anchors.topMargin: 10
             anchors.bottomMargin: 10
-            radius: 18
-            gradient: Gradient {
-                GradientStop { position: 0.0; color: "#FFF9F5" }
-                GradientStop { position: 1.0; color: "#FFF1E8" }
+            spacing: 12
+
+            Label {
+                Layout.fillWidth: true
+                text: root.backendSafe.statusMessage.length > 0
+                    ? root.backendSafe.statusMessage
+                    : root.backendSafe.saveStateText + " · " + root.backendSafe.currentEntryPath
+                color: root.secondaryTextColor
+                font.pixelSize: 12
+                font.family: root.uiFontFamily
+                elide: Text.ElideRight
             }
-            border.color: "#ECDCCC"
 
-            RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: 18
-                anchors.rightMargin: 18
-                spacing: 12
-
-                Label {
-                    Layout.fillWidth: true
-                    text: root.backendSafe.statusMessage.length > 0
-                        ? root.backendSafe.statusMessage
-                        : root.backendSafe.saveStateText + " · " + root.backendSafe.currentEntryPath
-                    color: root.secondaryTextColor
-                    font.pixelSize: 12
-                    elide: Text.ElideRight
-                }
-
-                Label {
-                    text: root.backendSafe.autoSaveStatusText
-                    color: root.backendSafe.autoSaveEnabled ? root.successColor : root.dangerColor
-                    font.pixelSize: 12
-                    font.bold: true
-                }
+            Label {
+                text: root.backendSafe.autoSaveStatusText
+                color: root.backendSafe.autoSaveEnabled ? root.successColor : root.dangerColor
+                font.pixelSize: 12
+                font.bold: true
+                font.family: root.uiFontFamily
             }
         }
     }
@@ -474,12 +478,9 @@ ApplicationWindow {
 
         Rectangle {
             id: sidebar
-            radius: 26
-            gradient: Gradient {
-                GradientStop { position: 0.0; color: "#FFFFFE" }
-                GradientStop { position: 1.0; color: "#FFF5EE" }
-            }
-            border.color: "#ECD8CF"
+            radius: root.largeRadius
+            color: root.surfaceColor
+            border.color: root.borderColor
             Layout.fillWidth: true
             Layout.fillHeight: root.wideLayout
             Layout.preferredWidth: root.wideLayout ? Math.max(330, Math.min(root.width * 0.33, 430)) : -1
@@ -513,11 +514,8 @@ ApplicationWindow {
 
                 Rectangle {
                     Layout.fillWidth: true
-                    radius: 18
-                    gradient: Gradient {
-                        GradientStop { position: 0.0; color: "#FFF4EA" }
-                        GradientStop { position: 1.0; color: "#FFEADD" }
-                    }
+                    radius: root.mediumRadius
+                    color: root.mutedSurfaceColor
                     border.color: root.borderColor
                     implicitHeight: 124
 
@@ -541,7 +539,7 @@ ApplicationWindow {
                             }
 
                             AppButton {
-                                tone: "accent"
+                                tone: "default"
                                 text: root.backendSafe.searchBusy ? "搜索中" : "搜索"
                                 enabled: !root.backendSafe.searchBusy
                                 implicitWidth: 86
@@ -562,7 +560,7 @@ ApplicationWindow {
                             }
 
                             AppButton {
-                                tone: root.backendSafe.autoSaveEnabled ? "coral" : "mint"
+                                tone: root.backendSafe.autoSaveEnabled ? "destructive" : "secondary"
                                 text: root.backendSafe.autoSaveEnabled ? "关闭自动保存" : "启用自动保存"
                                 implicitHeight: 40
                                 onClicked: root.backendSafe.toggleAutoSave()
@@ -572,9 +570,9 @@ ApplicationWindow {
                 }
 
                 AppButton {
-                    tone: "plum"
+                    tone: "default"
                     Layout.fillWidth: true
-                    implicitHeight: 48
+                    implicitHeight: 46
                     text: root.backendSafe.todayLabel
                     font.pixelSize: 14
                     font.bold: true
@@ -614,7 +612,7 @@ ApplicationWindow {
                             spacing: 8
 
                             AppButton {
-                                tone: "sky"
+                                tone: "outline"
                                 text: "‹"
                                 implicitWidth: 40
                                 implicitHeight: 40
@@ -622,7 +620,7 @@ ApplicationWindow {
                             }
 
                             AppButton {
-                                tone: "sky"
+                                tone: "outline"
                                 text: "›"
                                 implicitWidth: 40
                                 implicitHeight: 40
@@ -635,12 +633,9 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         Layout.minimumHeight: 280
-                        radius: 22
-                        gradient: Gradient {
-                            GradientStop { position: 0.0; color: "#FFFFFF" }
-                            GradientStop { position: 1.0; color: "#FFF7F5" }
-                        }
-                        border.color: "#ECDDD5"
+                        radius: root.mediumRadius
+                        color: root.elevatedColor
+                        border.color: root.borderColor
 
                         ColumnLayout {
                             anchors.fill: parent
@@ -685,9 +680,9 @@ ApplicationWindow {
                                         const token = refreshToken
                                         return root.backendRef.hasEntryForDate(isoDate)
                                     }
-                                    radius: 16
-                                    color: isSelected ? root.primaryColor : (cellArea.containsMouse ? root.mutedChipColor : "transparent")
-                                    border.color: model.today && !isSelected ? root.accentColor : "transparent"
+                                    radius: 12
+                                    color: isSelected ? root.primaryColor : (cellArea.containsMouse ? root.accentSoftColor : "transparent")
+                                    border.color: model.today && !isSelected ? root.ringColor : "transparent"
                                     border.width: model.today && !isSelected ? 1.5 : 0
                                     opacity: isCurrentMonth ? 1.0 : 0.42
 
@@ -695,6 +690,7 @@ ApplicationWindow {
                                         id: cellArea
                                         anchors.fill: parent
                                         hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
                                         onClicked: {
                                             if (parent.backendAvailable)
                                                 root.backendRef.selectDate(parent.isoDate)
@@ -706,7 +702,7 @@ ApplicationWindow {
                                         text: model.day
                                         font.pixelSize: 14
                                         font.bold: parent.isSelected || parent.hasEntry
-                                        color: parent.isSelected ? "#FAFAF9" : root.primaryColor
+                                        color: parent.isSelected ? root.primaryForegroundColor : root.primaryColor
                                     }
 
                                     Rectangle {
@@ -714,7 +710,7 @@ ApplicationWindow {
                                         width: 6
                                         height: 6
                                         radius: 3
-                                        color: parent.isSelected ? root.accentSoftColor : root.accentColor
+                                        color: parent.isSelected ? root.primaryForegroundColor : root.primaryColor
                                         anchors.horizontalCenter: parent.horizontalCenter
                                         anchors.bottom: parent.bottom
                                         anchors.bottomMargin: 7
@@ -727,12 +723,9 @@ ApplicationWindow {
 
                 Rectangle {
                     Layout.fillWidth: true
-                    radius: 18
-                    gradient: Gradient {
-                        GradientStop { position: 0.0; color: "#F6F0FF" }
-                        GradientStop { position: 1.0; color: "#EAF3FF" }
-                    }
-                    border.color: "#D9CCFF"
+                    radius: root.mediumRadius
+                    color: root.mutedSurfaceColor
+                    border.color: root.borderColor
                     implicitHeight: 86
 
                     ColumnLayout {
@@ -760,12 +753,9 @@ ApplicationWindow {
 
         Rectangle {
             id: editorCard
-            radius: 26
-            gradient: Gradient {
-                GradientStop { position: 0.0; color: "#FFFFFE" }
-                GradientStop { position: 1.0; color: "#FFF8FC" }
-            }
-            border.color: "#ECD8D6"
+            radius: root.largeRadius
+            color: root.surfaceColor
+            border.color: root.borderColor
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.minimumWidth: 420
@@ -799,25 +789,13 @@ ApplicationWindow {
                         }
                     }
 
-                    Rectangle {
-                        radius: 999
-                        color: root.backendSafe.autoSaveEnabled ? "#EFF6FF" : "#FEF2F2"
-                        border.color: root.backendSafe.autoSaveEnabled ? "#BFDBFE" : "#FECACA"
-                        implicitWidth: autoSaveChip.implicitWidth + 24
-                        implicitHeight: 38
-
-                        Label {
-                            id: autoSaveChip
-                            anchors.centerIn: parent
-                            text: root.backendSafe.autoSaveEnabled ? "自动保存开启" : "自动保存关闭"
-                            color: root.backendSafe.autoSaveEnabled ? "#1D4ED8" : root.dangerColor
-                            font.pixelSize: 12
-                            font.bold: true
-                        }
+                    AppBadge {
+                        tone: root.backendSafe.autoSaveEnabled ? "info" : "destructive"
+                        text: root.backendSafe.autoSaveEnabled ? "自动保存开启" : "自动保存关闭"
                     }
 
                     AppButton {
-                        tone: "accent"
+                        tone: "outline"
                         text: "页面内查找"
                         implicitHeight: 42
                         onClicked: root.openInPageSearch()
@@ -827,12 +805,9 @@ ApplicationWindow {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    radius: 22
-                    gradient: Gradient {
-                        GradientStop { position: 0.0; color: "#FFFFFF" }
-                        GradientStop { position: 1.0; color: "#FFF7FB" }
-                    }
-                    border.color: "#EEDBDA"
+                    radius: root.mediumRadius
+                    color: root.elevatedColor
+                    border.color: root.borderColor
                     clip: true
 
                     Flickable {
@@ -854,7 +829,7 @@ ApplicationWindow {
                             wrapMode: TextArea.Wrap
                             selectByMouse: true
                             persistentSelection: true
-                            selectionColor: "#D6E4FF"
+                            selectionColor: "#D4D4D8"
                             selectedTextColor: root.primaryColor
                             placeholderText: "请在这里开始记录今天的想法、计划与回顾…"
                             font.family: root.backendSafe.monospaceFamily
@@ -890,13 +865,14 @@ ApplicationWindow {
         height: Math.min(root.height * 0.84, 760)
         padding: 0
 
+        Overlay.modal: Rectangle {
+            color: "#8009090B"
+        }
+
         background: Rectangle {
-            radius: 28
-            gradient: Gradient {
-                GradientStop { position: 0.0; color: "#FFFFFE" }
-                GradientStop { position: 1.0; color: "#FFF6F0" }
-            }
-            border.color: "#ECD9D0"
+            radius: root.largeRadius
+            color: root.surfaceColor
+            border.color: root.borderColor
         }
 
         contentItem: ColumnLayout {
@@ -927,7 +903,7 @@ ApplicationWindow {
                 }
 
                 AppButton {
-                    tone: "sky"
+                    tone: "default"
                     text: "跳转到日期"
                     enabled: searchResultsList.currentIndex >= 0
                     implicitHeight: 42
@@ -955,12 +931,9 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     Layout.preferredWidth: root.wideLayout ? 0 : -1
-                    radius: 22
-                    gradient: Gradient {
-                        GradientStop { position: 0.0; color: "#FFF7F0" }
-                        GradientStop { position: 1.0; color: "#FFF1E8" }
-                    }
-                    border.color: "#EFDACA"
+                    radius: root.mediumRadius
+                    color: root.mutedSurfaceColor
+                    border.color: root.borderColor
 
                     ListView {
                         id: searchResultsList
@@ -978,9 +951,9 @@ ApplicationWindow {
                             required property string matchText
                             width: ListView.view.width
                             height: Math.max(72, resultLayout.implicitHeight + 20)
-                            radius: 18
-                            color: ListView.isCurrentItem ? "#F5F3FF" : "#FAFAF9"
-                            border.color: ListView.isCurrentItem ? "#C4B5FD" : root.borderColor
+                            radius: 12
+                            color: ListView.isCurrentItem ? root.accentSoftColor : root.surfaceColor
+                            border.color: ListView.isCurrentItem ? root.ringColor : root.borderColor
 
                             MouseArea {
                                 anchors.fill: parent
@@ -1028,12 +1001,9 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     Layout.minimumHeight: root.wideLayout ? 0 : 240
-                    radius: 22
-                    gradient: Gradient {
-                        GradientStop { position: 0.0; color: "#FFFFFF" }
-                        GradientStop { position: 1.0; color: "#FFF8FB" }
-                    }
-                    border.color: "#F1DED2"
+                    radius: root.mediumRadius
+                    color: root.elevatedColor
+                    border.color: root.borderColor
 
                     ColumnLayout {
                         anchors.fill: parent
@@ -1062,7 +1032,7 @@ ApplicationWindow {
                                 persistentSelection: true
                                 textFormat: TextEdit.RichText
                                 color: root.primaryColor
-                                selectionColor: "#D6E4FF"
+                                selectionColor: "#D4D4D8"
                                 selectedTextColor: root.primaryColor
                                 font.family: root.backendSafe.monospaceFamily
                                 font.pixelSize: 14
@@ -1200,12 +1170,9 @@ ApplicationWindow {
         }
 
         background: Rectangle {
-            radius: 22
-            gradient: Gradient {
-                GradientStop { position: 0.0; color: "#FFFDFC" }
-                GradientStop { position: 1.0; color: "#FFF1F8" }
-            }
-            border.color: "#F0DDD1"
+            radius: root.mediumRadius
+            color: root.surfaceColor
+            border.color: root.borderColor
         }
 
         contentItem: ColumnLayout {
@@ -1217,9 +1184,9 @@ ApplicationWindow {
             Rectangle {
                 Layout.fillWidth: true
                 implicitHeight: 34
-                radius: 12
-                color: "#FFF4EA"
-                border.color: "#F1D8C8"
+                radius: root.smallRadius
+                color: root.mutedSurfaceColor
+                border.color: root.borderColor
 
                 RowLayout {
                     anchors.fill: parent
@@ -1280,7 +1247,7 @@ ApplicationWindow {
                 }
 
                 AppButton {
-                    tone: "coral"
+                    tone: "ghost"
                     text: "关闭"
                     implicitHeight: 40
                     onClicked: inPageSearchPopup.close()
@@ -1307,7 +1274,7 @@ ApplicationWindow {
                 }
 
                 AppButton {
-                    tone: "plum"
+                    tone: "secondary"
                     text: "上一个"
                     enabled: inPageSearchPopup.matchCount > 0
                     implicitHeight: 40
@@ -1315,7 +1282,7 @@ ApplicationWindow {
                 }
 
                 AppButton {
-                    tone: "plum"
+                    tone: "secondary"
                     text: "下一个"
                     enabled: inPageSearchPopup.matchCount > 0
                     implicitHeight: 40
