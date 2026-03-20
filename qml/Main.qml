@@ -13,37 +13,9 @@ ApplicationWindow {
     color: backgroundColor
     font.family: root.uiFontFamily
 
-    property color backgroundColor: "#FAFAFA"
-    property color surfaceColor: "#FFFFFF"
-    property color elevatedColor: "#FCFCFD"
-    property color mutedSurfaceColor: "#F4F4F5"
-    property color borderColor: "#E4E4E7"
-    property color inputColor: "#E4E4E7"
-    property color primaryColor: "#18181B"
-    property color primaryForegroundColor: "#FAFAFA"
-    property color secondaryTextColor: "#71717A"
-    property color mutedTextColor: "#A1A1AA"
-    property color accentColor: "#18181B"
-    property color accentSoftColor: "#F4F4F5"
-    property color accentHoverColor: "#E4E4E7"
-    property color ringColor: "#A1A1AA"
-    property color ringSoftColor: "#F4F4F5"
-    property color successColor: "#15803D"
-    property color successSoftColor: "#F0FDF4"
-    property color dangerColor: "#DC2626"
-    property color dangerSoftColor: "#FEF2F2"
-    property color infoColor: "#2563EB"
-    property color infoSoftColor: "#EFF6FF"
-    property real largeRadius: 20
-    property real mediumRadius: 16
-    property real smallRadius: 10
-    property string uiFontFamily: Qt.platform.os === "windows" ? "Microsoft YaHei UI" : "Sans Serif"
-    property bool wideLayout: width >= 1040 && width / Math.max(height, 1) >= 1.1
-    property real pagePadding: Math.max(18, Math.min(width, height) * 0.022)
-    property real gap: wideLayout ? 20 : 16
-    property bool closeApproved: false
     property var backendRef: backend
     property bool backendReady: backendRef !== null && backendRef !== undefined
+    property bool closeApproved: false
 
     QtObject {
         id: backendStub
@@ -57,6 +29,7 @@ ApplicationWindow {
         property string todayLabel: "今天"
         property string currentDateDisplay: ""
         property string monospaceFamily: "Consolas"
+        property string themeMode: "dark"
         property string currentContent: ""
         property string searchResultCountText: "找到 0 个结果"
         property var searchResultsModel: null
@@ -68,6 +41,7 @@ ApplicationWindow {
         function requestWindowClose() {}
         function saveCurrentEntry() {}
         function toggleAutoSave() {}
+        function toggleTheme() {}
         function selectSearchResult(index) {}
         function performGlobalSearch(text) {}
         function returnToToday() { return false }
@@ -78,6 +52,43 @@ ApplicationWindow {
     }
 
     property var backendSafe: backendReady ? backendRef : backendStub
+    property bool darkMode: root.backendSafe.themeMode !== "light"
+    property color backgroundColor: darkMode ? "#09090B" : "#FAFAFA"
+    property color surfaceColor: darkMode ? "#111827" : "#FFFFFF"
+    property color elevatedColor: darkMode ? "#18181B" : "#FCFCFD"
+    property color mutedSurfaceColor: darkMode ? "#18181B" : "#F4F4F5"
+    property color borderColor: darkMode ? "#27272A" : "#E4E4E7"
+    property color inputColor: darkMode ? "#3F3F46" : "#E4E4E7"
+    property color primaryColor: darkMode ? "#FAFAFA" : "#18181B"
+    property color primaryForegroundColor: darkMode ? "#09090B" : "#FAFAFA"
+    property color secondaryTextColor: darkMode ? "#A1A1AA" : "#71717A"
+    property color mutedTextColor: darkMode ? "#71717A" : "#A1A1AA"
+    property color accentColor: darkMode ? "#FAFAFA" : "#18181B"
+    property color accentSoftColor: darkMode ? "#27272A" : "#F4F4F5"
+    property color accentHoverColor: darkMode ? "#3F3F46" : "#E4E4E7"
+    property color ringColor: darkMode ? "#71717A" : "#A1A1AA"
+    property color ringSoftColor: darkMode ? "#18181B" : "#F4F4F5"
+    property color successColor: darkMode ? "#4ADE80" : "#15803D"
+    property color successSoftColor: darkMode ? "#052E16" : "#F0FDF4"
+    property color dangerColor: darkMode ? "#F87171" : "#DC2626"
+    property color dangerSoftColor: darkMode ? "#450A0A" : "#FEF2F2"
+    property color dangerForegroundColor: "#FAFAFA"
+    property color infoColor: darkMode ? "#60A5FA" : "#2563EB"
+    property color infoSoftColor: darkMode ? "#172554" : "#EFF6FF"
+    property color primaryHoverColor: darkMode ? "#E4E4E7" : "#27272A"
+    property color dangerHoverColor: darkMode ? "#EF4444" : "#B91C1C"
+    property color successBorderColor: darkMode ? "#166534" : "#BBF7D0"
+    property color dangerBorderColor: darkMode ? "#7F1D1D" : "#FECACA"
+    property color infoBorderColor: darkMode ? "#1D4ED8" : "#BFDBFE"
+    property color overlayColor: darkMode ? "#A6000000" : "#8009090B"
+    property color editorSelectionColor: darkMode ? "#3F3F46" : "#D4D4D8"
+    property real largeRadius: 20
+    property real mediumRadius: 16
+    property real smallRadius: 10
+    property string uiFontFamily: Qt.platform.os === "windows" ? "Microsoft YaHei UI" : "Sans Serif"
+    property bool wideLayout: width >= 1040 && width / Math.max(height, 1) >= 1.1
+    property real pagePadding: Math.max(18, Math.min(width, height) * 0.022)
+    property real gap: wideLayout ? 20 : 16
 
     Rectangle {
         z: -2
@@ -98,9 +109,9 @@ ApplicationWindow {
                     ? "transparent"
                     : root.surfaceColor
         readonly property color toneHoverFill: tone === "default"
-            ? "#27272A"
+            ? root.primaryHoverColor
             : tone === "destructive"
-                ? "#B91C1C"
+                ? root.dangerHoverColor
                 : tone === "secondary"
                     ? root.accentHoverColor
                 : tone === "ghost"
@@ -113,9 +124,11 @@ ApplicationWindow {
                 : tone === "ghost"
                     ? "transparent"
                     : root.borderColor
-        readonly property color toneText: tone === "default" || tone === "destructive"
+        readonly property color toneText: tone === "default"
             ? root.primaryForegroundColor
-            : root.primaryColor
+            : tone === "destructive"
+                ? root.dangerForegroundColor
+                : root.primaryColor
         implicitHeight: 40
         leftPadding: 14
         rightPadding: 14
@@ -248,11 +261,11 @@ ApplicationWindow {
                     ? root.infoSoftColor
                     : root.accentSoftColor
         border.color: tone === "success"
-            ? "#BBF7D0"
+            ? root.successBorderColor
             : tone === "destructive"
-                ? "#FECACA"
+                ? root.dangerBorderColor
                 : tone === "info"
-                    ? "#BFDBFE"
+                    ? root.infoBorderColor
                     : root.borderColor
         border.width: 1
 
@@ -355,6 +368,13 @@ ApplicationWindow {
             AppBadge {
                 tone: root.backendSafe.saveStateText === "已保存" ? "success" : "destructive"
                 text: root.backendSafe.saveStateText
+            }
+
+            AppButton {
+                tone: "outline"
+                text: root.darkMode ? "切换浅色模式" : "切换深色模式"
+                implicitHeight: 40
+                onClicked: root.backendSafe.toggleTheme()
             }
         }
     }
@@ -829,7 +849,7 @@ ApplicationWindow {
                             wrapMode: TextArea.Wrap
                             selectByMouse: true
                             persistentSelection: true
-                            selectionColor: "#D4D4D8"
+                            selectionColor: root.editorSelectionColor
                             selectedTextColor: root.primaryColor
                             placeholderText: "请在这里开始记录今天的想法、计划与回顾…"
                             font.family: root.backendSafe.monospaceFamily
@@ -866,7 +886,7 @@ ApplicationWindow {
         padding: 0
 
         Overlay.modal: Rectangle {
-            color: "#8009090B"
+            color: root.overlayColor
         }
 
         background: Rectangle {
@@ -1032,7 +1052,7 @@ ApplicationWindow {
                                 persistentSelection: true
                                 textFormat: TextEdit.RichText
                                 color: root.primaryColor
-                                selectionColor: "#D4D4D8"
+                                selectionColor: root.editorSelectionColor
                                 selectedTextColor: root.primaryColor
                                 font.family: root.backendSafe.monospaceFamily
                                 font.pixelSize: 14

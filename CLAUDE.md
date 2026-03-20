@@ -4,30 +4,35 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a **Calendar Diary** application built with PyQt6 - a GUI diary application that allows users to record daily entries through a calendar interface. Users can select dates from a calendar widget and write diary entries in a rich text editor, with automatic file management and search capabilities.
+This is a **Calendar Diary** desktop application built with **PyQt6 + Qt Quick/QML**. It provides a responsive calendar-based diary UI with plain-text editing, automatic file management, full-text search, in-page find, and a light/dark theme toggle that defaults to dark mode.
 
 ## Core Architecture
 
 ### Main Application Structure
-- **`main.py`** - Single-file PyQt6 application containing all core functionality
-- **`DiaryApp`** class - Main application window inheriting from `QMainWindow`
-- **Custom Widgets**:
-  - `PlainTextEdit` - Custom text editor that enforces plain text paste
-  - `SearchDialog` - Results dialog for diary content search
-  - `InPageSearchDialog` - Find-in-page search functionality
-  - `SearchResultItem` - Data structure for search results
+- **`main.py`** - Single Python entry point containing:
+  - `DiaryBackend` - QObject backend exposed to QML via properties, slots, and signals
+  - `SearchResultItem` / `SearchResultModel` - Search result data structures for QML `ListView`
+  - `main()` - Creates `QApplication`, applies Qt Quick Controls style, loads the icon, and starts `QQmlApplicationEngine`
+- **`qml/Main.qml`** - Main UI containing:
+  - Responsive dual-pane / single-column layout
+  - Calendar sidebar with month navigation and entry dots
+  - Plain-text editor card
+  - Global search popup and in-page search popup
+  - Reusable local components such as `AppButton`, `AppTextField`, `AppCheckBox`, and `AppBadge`
 
 ### File Storage System
 - **Structure**: `diary_entries/YYYY/MM/YYYY-MM-DD.txt`
 - **Migration**: Automatic on-demand migration from old flat structure to hierarchical structure
 - **Encoding**: UTF-8 text files for diary entries
 - **Auto-save**: Content is automatically saved when switching dates or closing application
+- **Theme preference**: UI theme mode is persisted through `QSettings`
 
 ### Key Features Implementation
 - **Calendar highlighting**: Visual indicators for dates with diary entries
 - **Search functionality**: Full-text search across all diary entries with context preview
 - **In-page search**: Ctrl+F search within current diary entry with highlighting
 - **Content tracking**: Tracks unsaved changes with visual indicators
+- **Theme system**: Light/dark theme switch exposed from `DiaryBackend` to QML, defaulting to dark mode
 - **Performance optimization**: Debounced search, batch highlighting, text length limits
 
 ## Development Commands
@@ -70,7 +75,8 @@ python build_with_nuitka.py  # Creates standalone executable using Nuitka
 ## File Organization
 
 ```
-├── main.py                 # Main application (single file)
+├── main.py                 # Python backend entry point
+├── qml/Main.qml           # Main Qt Quick UI
 ├── icon.ico               # Application icon
 ├── resources.qrc          # Qt resource file definition
 ├── resources_rc.py        # Compiled Qt resources (generated)
@@ -105,3 +111,4 @@ python build_with_nuitka.py  # Creates standalone executable using Nuitka
 - **Status feedback**: Progress indicators during search operations
 - **Confirmation dialogs**: Unsaved changes protection on exit
 - **Calendar navigation**: Month/year navigation with persistent highlighting
+- **Theme toggle**: Header action switches between dark and light themes; default is dark mode

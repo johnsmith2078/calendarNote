@@ -14,6 +14,7 @@ from PyQt6.QtCore import (
     QDate,
     QModelIndex,
     QObject,
+    QSettings,
     QTimer,
     Qt,
     QUrl,
@@ -21,15 +22,55 @@ from PyQt6.QtCore import (
     pyqtSignal,
     pyqtSlot,
 )
-from PyQt6.QtGui import QIcon
+from PyQt6.QtGui import QColor, QIcon, QPalette
 from PyQt6.QtQml import QQmlApplicationEngine
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
 TITLE_BASE = "日历笔记本"
+SETTINGS_ORGANIZATION = "calendarNote"
+SETTINGS_APPLICATION = "calendarNote"
+SETTINGS_KEY_THEME_MODE = "ui/theme_mode"
+THEME_MODE_LIGHT = "light"
+THEME_MODE_DARK = "dark"
+DEFAULT_THEME_MODE = THEME_MODE_DARK
 MAX_SEARCH_RESULTS = 100
 MAX_SEARCHABLE_FILE_SIZE = 1024 * 1024
 MAX_PREVIEW_FILE_SIZE = 512 * 1024
 MAX_CONTENT_LENGTH = 200_000
+APP_THEME_PALETTES = {
+    THEME_MODE_DARK: {
+        "window": "#09090B",
+        "surface": "#18181B",
+        "base": "#111827",
+        "text": "#FAFAFA",
+        "muted_text": "#A1A1AA",
+        "button": "#18181B",
+        "highlight": "#F4F4F5",
+        "highlighted_text": "#09090B",
+        "bright_text": "#FFFFFF",
+        "disabled_text": "#71717A",
+        "disabled_surface": "#18181B",
+        "disabled_highlight": "#3F3F46",
+        "tooltip": "#111827",
+        "shadow": "#000000",
+    },
+    THEME_MODE_LIGHT: {
+        "window": "#FAFAFA",
+        "surface": "#FFFFFF",
+        "base": "#FCFCFD",
+        "text": "#18181B",
+        "muted_text": "#71717A",
+        "button": "#FFFFFF",
+        "highlight": "#18181B",
+        "highlighted_text": "#FAFAFA",
+        "bright_text": "#FFFFFF",
+        "disabled_text": "#A1A1AA",
+        "disabled_surface": "#F4F4F5",
+        "disabled_highlight": "#D4D4D8",
+        "tooltip": "#FFFFFF",
+        "shadow": "#A1A1AA",
+    },
+}
 WEEKDAY_LABELS = {
     1: "周一",
     2: "周二",
@@ -132,6 +173,7 @@ class DiaryBackend(QObject):
     searchPreviewDateChanged = pyqtSignal()
     searchPreviewRichTextChanged = pyqtSignal()
     calendarVersionChanged = pyqtSignal()
+    themeModeChanged = pyqtSignal()
     searchCompleted = pyqtSignal(bool, str)
     windowCloseApproved = pyqtSignal()
 
@@ -158,6 +200,10 @@ class DiaryBackend(QObject):
         self._calendar_version = 0
         self._month_entry_cache: dict[tuple[int, int], set[str]] = {}
         self._search_results_model = SearchResultModel(self)
+        self._settings = QSettings(SETTINGS_ORGANIZATION, SETTINGS_APPLICATION)
+        self._theme_mode = self._normalize_theme_mode(
+            self._settings.value(SETTINGS_KEY_THEME_MODE, DEFAULT_THEME_MODE, type=str)
+        )
 
         self._auto_save_timer = QTimer(self)
         self._auto_save_timer.setInterval(self._auto_save_interval)
@@ -171,6 +217,7 @@ class DiaryBackend(QObject):
         self._status_timer.setSingleShot(True)
         self._status_timer.timeout.connect(self.clearStatusMessage)
 
+        self._apply_application_theme()
         self.ensure_base_diary_folder()
         self.load_entry_for_date(self._current_date)
         self._ensure_month_cache(self._current_date.year(), self._current_date.month())
@@ -199,6 +246,10 @@ class DiaryBackend(QObject):
     @pyqtProperty(str, notify=todayLabelChanged)
     def todayLabel(self) -> str:
         return f"今天 · {self._last_system_date.toString('yyyy-MM-dd')}"
+
+    @pyqtProperty(str, notify=themeModeChanged)
+    def themeMode(self) -> str:
+        return self._theme_mode
 
     @pyqtProperty(bool, notify=autoSaveEnabledChanged)
     def autoSaveEnabled(self) -> bool:
@@ -275,6 +326,11 @@ class DiaryBackend(QObject):
         self._set_auto_save_enabled(not self._auto_save_enabled)
         state_text = "已开启" if self._auto_save_enabled else "已关闭"
         self._set_status(f"自动保存{state_text}", 2000)
+
+    @pyqtSlot()
+    def toggleTheme(self) -> None:
+        next_mode = THEME_MODE_LIGHT if self._theme_mode == THEME_MODE_DARK else THEME_MODE_DARK
+        self._set_theme_mode(next_mode, announce=True)
 
     @pyqtSlot(str)
     def selectDate(self, iso_date: str) -> None:
@@ -508,6 +564,106 @@ class DiaryBackend(QObject):
             self._auto_save_timer.stop()
         self.autoSaveEnabledChanged.emit()
         self.autoSaveStatusTextChanged.emit()
+
+    def _normalize_theme_mode(self, theme_mode: str | None) -> str:
+        if isinstance(theme_mode, str) and theme_mode.strip().lower() == THEME_MODE_LIGHT:
+            return THEME_MODE_LIGHT
+        return THEME_MODE_DARK
+
+    def _set_theme_mode(self, theme_mode: str, announce: bool = False) -> None:
+        normalized_mode = self._normalize_theme_mode(theme_mode)
+        if normalized_mode == self._theme_mode:
+            return
+
+        self._theme_mode = normalized_mode
+        self._settings.setValue(SETTINGS_KEY_THEME_MODE, normalized_mode)
+        self._settings.sync()
+        self._apply_application_theme()
+        self.themeModeChanged.emit()
+
+        if announce:
+            label = "深色模式" if normalized_mode == THEME_MODE_DARK else "浅色模式"
+            self._set_status(f"已切换到{label}", 2000)
+
+    def _build_application_palette(self, theme_mode: str) -> QPalette:
+        colors = APP_THEME_PALETTES[theme_mode]
+        palette = QPalette()
+        role_map = {
+            QPalette.ColorRole.Window: "window",
+            QPalette.ColorRole.WindowText: "text",
+            QPalette.ColorRole.Base: "base",
+            QPalette.ColorRole.AlternateBase: "surface",
+            QPalette.ColorRole.ToolTipBase: "tooltip",
+            QPalette.ColorRole.ToolTipText: "text",
+            QPalette.ColorRole.Text: "text",
+            QPalette.ColorRole.Button: "button",
+            QPalette.ColorRole.ButtonText: "text",
+            QPalette.ColorRole.BrightText: "bright_text",
+            QPalette.ColorRole.Highlight: "highlight",
+            QPalette.ColorRole.HighlightedText: "highlighted_text",
+            QPalette.ColorRole.PlaceholderText: "muted_text",
+            QPalette.ColorRole.Light: "surface",
+            QPalette.ColorRole.Midlight: "base",
+            QPalette.ColorRole.Dark: "window",
+            QPalette.ColorRole.Mid: "base",
+            QPalette.ColorRole.Shadow: "shadow",
+        }
+        for role, key in role_map.items():
+            palette.setColor(role, QColor(colors[key]))
+
+        palette.setColor(
+            QPalette.ColorGroup.Disabled,
+            QPalette.ColorRole.WindowText,
+            QColor(colors["disabled_text"]),
+        )
+        palette.setColor(
+            QPalette.ColorGroup.Disabled,
+            QPalette.ColorRole.Text,
+            QColor(colors["disabled_text"]),
+        )
+        palette.setColor(
+            QPalette.ColorGroup.Disabled,
+            QPalette.ColorRole.ButtonText,
+            QColor(colors["disabled_text"]),
+        )
+        palette.setColor(
+            QPalette.ColorGroup.Disabled,
+            QPalette.ColorRole.PlaceholderText,
+            QColor(colors["disabled_text"]),
+        )
+        palette.setColor(
+            QPalette.ColorGroup.Disabled,
+            QPalette.ColorRole.Base,
+            QColor(colors["disabled_surface"]),
+        )
+        palette.setColor(
+            QPalette.ColorGroup.Disabled,
+            QPalette.ColorRole.Button,
+            QColor(colors["disabled_surface"]),
+        )
+        palette.setColor(
+            QPalette.ColorGroup.Disabled,
+            QPalette.ColorRole.Highlight,
+            QColor(colors["disabled_highlight"]),
+        )
+        palette.setColor(
+            QPalette.ColorGroup.Disabled,
+            QPalette.ColorRole.HighlightedText,
+            QColor(colors["text"]),
+        )
+        return palette
+
+    def _apply_application_theme(self) -> None:
+        colors = APP_THEME_PALETTES[self._theme_mode]
+        self._app.setPalette(self._build_application_palette(self._theme_mode))
+        self._app.setStyleSheet(
+            "QToolTip {"
+            f" color: {colors['text']};"
+            f" background-color: {colors['tooltip']};"
+            f" border: 1px solid {colors['base']};"
+            " padding: 4px 8px;"
+            " }"
+        )
 
     def _set_status(self, message: str, timeout_ms: int) -> None:
         if message != self._status_message:
@@ -833,6 +989,9 @@ def main() -> int:
     if os.environ.get("QT_QUICK_CONTROLS_STYLE", "").lower() in {"", "windows", "macos", "ios", "android"}:
         os.environ["QT_QUICK_CONTROLS_STYLE"] = "Basic"
     app = QApplication(sys.argv)
+    app.setStyle("Fusion")
+    app.setOrganizationName(SETTINGS_ORGANIZATION)
+    app.setApplicationName(SETTINGS_APPLICATION)
     app.setApplicationDisplayName(TITLE_BASE)
     load_application_icon(app)
 

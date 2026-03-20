@@ -3,10 +3,10 @@
 ## Project Structure & Module Organization
 - 当前项目已经演进为 **PyQt6 + Qt Quick/QML** 架构，不再是传统的 QWidget 多窗口实现。
 - `main.py` 是唯一 Python 入口，主要包含：
-  - `DiaryBackend`：通过 `@pyqtProperty`、`@pyqtSlot`、Qt signal 向 QML 暴露状态；负责日期切换、自动保存、跨日检测、文件读写、旧版数据迁移、全文搜索、搜索预览高亮、月度缓存等核心逻辑。
+  - `DiaryBackend`：通过 `@pyqtProperty`、`@pyqtSlot`、Qt signal 向 QML 暴露状态；负责日期切换、自动保存、跨日检测、文件读写、旧版数据迁移、全文搜索、搜索预览高亮、月度缓存、主题模式持久化与切换等核心逻辑。
   - `SearchResultItem` / `SearchResultModel`：为 QML `ListView` 提供搜索结果数据模型。
   - `main()`：初始化 `QApplication`、设置 Qt Quick Controls 样式、加载图标，并启动 `QQmlApplicationEngine` 加载 `qml/Main.qml`。
-- `qml/Main.qml` 是主界面，包含响应式双栏/单栏布局、日历侧栏、纯文本编辑区、全文搜索结果弹窗、页面内搜索弹窗，以及 `AppButton` / `AppTextField` / `AppCheckBox` 等局部复用组件。
+- `qml/Main.qml` 是主界面，包含响应式双栏/单栏布局、日历侧栏、纯文本编辑区、全文搜索结果弹窗、页面内搜索弹窗、浅色/深色主题 token，以及 `AppButton` / `AppTextField` / `AppCheckBox` 等局部复用组件。
 - 日记文件使用 UTF-8 纯文本，存储在 `diary_entries/YYYY/MM/YYYY-MM-DD.txt`；访问某天数据时会按需兼容旧的扁平结构 `diary_entries/YYYY-MM-DD.txt`。
 - 构建与资源脚本：
   - `build_with_nuitka.py`：使用 Nuitka 打包，需一并包含 `qml/` 与 `icon.ico`。
@@ -31,7 +31,7 @@
 - 修改后端暴露给 QML 的属性名、槽函数名或信号名时，必须同步检查 `qml/Main.qml` 的绑定、`Connections`、按钮事件和弹窗逻辑。
 - 修改 `qml/Main.qml` 时：
   - 优先复用已有的 `AppButton`、`AppTextField`、`AppCheckBox`，保持视觉一致性；
-  - 保持调色板、间距、响应式阈值等全局 token 集中在文件顶部；
+  - 保持调色板、间距、响应式阈值等全局 token 集中在文件顶部；如果同时维护浅色/深色两套 token，尽量成对对齐，避免只改单侧主题；
   - 保留 `backendSafe` / `backendStub` 容错结构，避免界面在后端未注入时直接崩溃；
   - 优先使用声明式绑定，只有在弹窗拖动、页面内查找遍历、月份同步这类交互胶水场景下再写 JS 逻辑。
 - 用户可见文案、状态提示和注释优先使用简体中文，与现有界面语气保持一致。
@@ -48,6 +48,7 @@
 - 基础冒烟：
   - 运行 `python main.py`；
   - 确认主窗口能正常加载，顶部标题、底部状态栏、当前日期和“今天”按钮文本正确；
+  - 确认默认以深色模式启动，并且主题切换按钮可以在浅色 / 深色之间往返切换；
   - 宽窗口下应为左右双栏，窄窗口下应自动切换为纵向布局。
 - 编辑与保存：
   - 新建或修改今天的日记，确认落盘路径为 `diary_entries/YYYY/MM/YYYY-MM-DD.txt`；
