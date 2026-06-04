@@ -24,11 +24,13 @@ from PyQt6.QtCore import (
 )
 from PyQt6.QtGui import QColor, QIcon, QPalette
 from PyQt6.QtQml import QQmlApplicationEngine
+from PyQt6.QtNetwork import QLocalServer, QLocalSocket
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
 TITLE_BASE = "日历笔记本"
 SETTINGS_ORGANIZATION = "calendarNote"
 SETTINGS_APPLICATION = "calendarNote"
+SINGLE_INSTANCE_SERVER_NAME = f"{SETTINGS_ORGANIZATION}.{SETTINGS_APPLICATION}.single-instance"
 SETTINGS_KEY_THEME_MODE = "ui/theme_mode"
 THEME_MODE_LIGHT = "light"
 THEME_MODE_DARK = "dark"
@@ -974,6 +976,101 @@ def resolve_runtime_path(*parts: str) -> Path:
     return base_dir.joinpath(*parts)
 
 
+def notify_existing_instance() -> bool:
+    socket = QLocalSocket()
+    socket.connectToServer(SINGLE_INSTANCE_SERVER_NAME)
+    if not socket.waitForConnected(250):
+        return False
+
+    socket.write(b"activate\n")
+    socket.flush()
+    socket.waitForBytesWritten(250)
+    if socket.waitForReadyRead(500):
+        reply = bytes(socket.readAll()).decode("utf-8", errors="ignore").strip()
+        for line in reply.splitlines():
+            if line.startswith("hwnd:"):
+                try:
+                    activate_native_window_handle(int(line.removeprefix("hwnd:")))
+                except ValueError:
+                    pass
+                break
+    socket.disconnectFromServer()
+    return True
+
+
+class SingleInstanceServer(QObject):
+    activationRequested = pyqtSignal()
+
+    def __init__(self, parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self._activation_window: QObject | None = None
+        self._server = QLocalServer(self)
+        self._server.setSocketOptions(QLocalServer.SocketOption.UserAccessOption)
+        if not self._server.listen(SINGLE_INSTANCE_SERVER_NAME):
+            QLocalServer.removeServer(SINGLE_INSTANCE_SERVER_NAME)
+            if not self._server.listen(SINGLE_INSTANCE_SERVER_NAME):
+                raise RuntimeError(self._server.errorString())
+
+        self._server.newConnection.connect(self._handle_new_connection)
+
+    def set_activation_window(self, window: QObject) -> None:
+        self._activation_window = window
+
+    def _handle_new_connection(self) -> None:
+        while self._server.hasPendingConnections():
+            socket = self._server.nextPendingConnection()
+            if socket is not None:
+                hwnd = native_window_handle(self._activation_window)
+                if hwnd is not None:
+                    socket.write(f"hwnd:{hwnd}\n".encode("utf-8"))
+                    socket.flush()
+                    socket.waitForBytesWritten(100)
+                socket.disconnectFromServer()
+        self.activationRequested.emit()
+
+
+def native_window_handle(window: QObject | None) -> int | None:
+    if window is None:
+        return None
+    try:
+        hwnd = int(window.winId())
+    except (AttributeError, RuntimeError, TypeError, ValueError):
+        return None
+    return hwnd or None
+
+
+def activate_application_window(window: QObject | None) -> None:
+    if window is None:
+        return
+
+    for method_name in ("show", "showNormal", "raise_", "requestActivate"):
+        method = getattr(window, method_name, None)
+        if callable(method):
+            method()
+
+    if sys.platform == "win32":
+        hwnd = native_window_handle(window)
+        if hwnd is not None:
+            activate_native_window_handle(hwnd)
+
+
+def activate_native_window_handle(hwnd: int) -> None:
+    if sys.platform != "win32" or hwnd == 0:
+        return
+
+    try:
+        import ctypes
+
+        user32 = ctypes.windll.user32
+        if user32.IsIconic(hwnd):
+            user32.ShowWindow(hwnd, 9)
+        else:
+            user32.ShowWindow(hwnd, 5)
+        user32.SetForegroundWindow(hwnd)
+    except OSError:
+        return
+
+
 def load_application_icon(app: QApplication) -> None:
     candidates = [
         Path.cwd() / "icon.ico",
@@ -993,6 +1090,16 @@ def main() -> int:
     app.setOrganizationName(SETTINGS_ORGANIZATION)
     app.setApplicationName(SETTINGS_APPLICATION)
     app.setApplicationDisplayName(TITLE_BASE)
+
+    if notify_existing_instance():
+        return 0
+
+    try:
+        single_instance_server = SingleInstanceServer(app)
+    except RuntimeError as error:
+        QMessageBox.critical(None, TITLE_BASE, f"无法启动单应用监听：{error}")
+        return 1
+
     load_application_icon(app)
 
     backend = DiaryBackend(app)
@@ -1003,6 +1110,9 @@ def main() -> int:
     engine.load(QUrl.fromLocalFile(str(main_qml)))
     if not engine.rootObjects():
         return 1
+    main_window = engine.rootObjects()[0]
+    single_instance_server.set_activation_window(main_window)
+    single_instance_server.activationRequested.connect(lambda: activate_application_window(main_window))
     return app.exec()
 
 

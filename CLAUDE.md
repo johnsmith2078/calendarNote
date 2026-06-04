@@ -12,7 +12,7 @@ This is a **Calendar Diary** desktop application built with **PyQt6 + Qt Quick/Q
 - **`main.py`** - Single Python entry point containing:
   - `DiaryBackend` - QObject backend exposed to QML via properties, slots, and signals
   - `SearchResultItem` / `SearchResultModel` - Search result data structures for QML `ListView`
-  - `main()` - Creates `QApplication`, applies Qt Quick Controls style, loads the icon, and starts `QQmlApplicationEngine`
+  - `main()` - Creates `QApplication`, enforces the single-instance launch guard, applies Qt Quick Controls style, loads the icon, and starts `QQmlApplicationEngine`
 - **`qml/Main.qml`** - Main UI containing:
   - Responsive dual-pane / single-column layout
   - Calendar sidebar with month navigation and entry dots
@@ -33,6 +33,7 @@ This is a **Calendar Diary** desktop application built with **PyQt6 + Qt Quick/Q
 - **In-page search**: Ctrl+F search within current diary entry with highlighting
 - **Content tracking**: Tracks unsaved changes with visual indicators
 - **Theme system**: Light/dark theme switch exposed from `DiaryBackend` to QML, defaulting to dark mode
+- **Single instance**: Re-launching the app activates the existing main window instead of opening a second one
 - **Performance optimization**: Debounced search, batch highlighting, text length limits
 
 ## Development Commands
@@ -41,6 +42,8 @@ This is a **Calendar Diary** desktop application built with **PyQt6 + Qt Quick/Q
 ```bash
 python main.py
 ```
+
+Running the command again while the app is already open activates the existing main window.
 
 ### Building Resources
 ```bash

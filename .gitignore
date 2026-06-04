@@ -44,3 +44,4 @@ diary_entries/
 out/
 *.exe
 resources_rc.py
+.codegraph/

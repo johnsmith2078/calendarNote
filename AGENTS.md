@@ -5,7 +5,7 @@
 - `main.py` 是唯一 Python 入口，主要包含：
   - `DiaryBackend`：通过 `@pyqtProperty`、`@pyqtSlot`、Qt signal 向 QML 暴露状态；负责日期切换、自动保存、跨日检测、文件读写、旧版数据迁移、全文搜索、搜索预览高亮、月度缓存、主题模式持久化与切换等核心逻辑。
   - `SearchResultItem` / `SearchResultModel`：为 QML `ListView` 提供搜索结果数据模型。
-  - `main()`：初始化 `QApplication`、设置 Qt Quick Controls 样式、加载图标，并启动 `QQmlApplicationEngine` 加载 `qml/Main.qml`。
+  - `main()`：初始化 `QApplication`、设置单应用实例监听、设置 Qt Quick Controls 样式、加载图标，并启动 `QQmlApplicationEngine` 加载 `qml/Main.qml`；重复启动时会通知已运行实例恢复并前台化主窗口。
 - `qml/Main.qml` 是主界面，包含响应式双栏/单栏布局、日历侧栏、纯文本编辑区、全文搜索结果弹窗、页面内搜索弹窗、浅色/深色主题 token，以及 `AppButton` / `AppTextField` / `AppCheckBox` 等局部复用组件。
 - 日记文件使用 UTF-8 纯文本，存储在 `diary_entries/YYYY/MM/YYYY-MM-DD.txt`；访问某天数据时会按需兼容旧的扁平结构 `diary_entries/YYYY-MM-DD.txt`。
 - 构建与资源脚本：
@@ -17,6 +17,7 @@
 ## Build, Test, and Development Commands
 - 安装依赖（Python 3.12+）：`uv sync`（优先）或 `pip install -e .`
 - 本地运行：`python main.py`
+- 重复启动：再次运行 `python main.py` 时不会创建第二个窗口，会激活已运行的主窗口。
 - Python 语法快速检查：`python -m py_compile main.py build_with_nuitka.py compile_resources.py`
 - 修改 `resources.qrc` 或其引用资源后重建：`python compile_resources.py`
 - Windows 打包：`python build_with_nuitka.py`
