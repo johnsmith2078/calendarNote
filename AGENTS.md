@@ -2,6 +2,15 @@
 
 ## Project Structure & Module Organization
 - 当前项目已经演进为 **PyQt6 + Qt Quick/QML** 架构，不再是传统的 QWidget 多窗口实现。
+- `cpp/` 目录包含 Qt/C++ 移植版：
+  - `cpp/src/main.cpp`：Qt Widgets 单文件实现，覆盖日期切换、自动保存、未保存保护、旧数据迁移、全文搜索、页面内查找、主题切换、日历圆点和单实例激活。
+  - `cpp/xmake.lua`：xmake 构建与打包脚本，参考 `cpp/xmake.ref.lua`，release 构建会先用 `windeployqt` 收集 Qt 运行库，再调用 Enigma Virtual Box 生成单文件 exe。
+  - `cpp/src/resources.qrc` / `cpp/src/app.rc`：复用根目录 `icon.ico` 作为 Qt 资源与 Windows 程序图标。
+- `rust/` 目录包含 Rust + Tauri 移植版：
+  - `rust/frontend/index.html`：无前端框架的静态单页界面，覆盖响应式日历、纯文本编辑、全文搜索弹窗、页面内查找、主题切换和未保存确认。
+  - `rust/src-tauri/src/main.rs`：Tauri 命令后端，负责 UTF-8 文件读写、旧数据按需迁移、全文搜索、月度圆点扫描、主题持久化和单实例激活。
+  - `rust/src-tauri/tauri.conf.json`：启用 `withGlobalTauri`，`bundle.active=false`；release 产物为 no bundle exe。
+  - `rust/package.json`：提供 `dev`、`build:no-bundle`、`build:tiny` 脚本；`build:tiny` 会在 no bundle 后用 UPX 压缩 `calendarNote.exe`（本机未安装 UPX 时跳过）。
 - `main.py` 是唯一 Python 入口，主要包含：
   - `DiaryBackend`：通过 `@pyqtProperty`、`@pyqtSlot`、Qt signal 向 QML 暴露状态；负责日期切换、自动保存、跨日检测、文件读写、旧版数据迁移、全文搜索、搜索预览高亮、月度缓存、主题模式持久化与切换等核心逻辑。
   - `SearchResultItem` / `SearchResultModel`：为 QML `ListView` 提供搜索结果数据模型。
@@ -21,6 +30,15 @@
 - Python 语法快速检查：`python -m py_compile main.py build_with_nuitka.py compile_resources.py`
 - 修改 `resources.qrc` 或其引用资源后重建：`python compile_resources.py`
 - Windows 打包：`python build_with_nuitka.py`
+- C++ release 构建与单文件打包：`cd cpp && xmake f -m release -y && xmake -y`
+- C++ 单文件产物：`cpp/build/windows/x64/release/calendarNote_single.exe`
+- Rust/Tauri 依赖安装：`cd rust && npm install`
+- Rust/Tauri 本地运行：`cd rust && npm run dev`
+- Rust 后端测试：`cd rust/src-tauri && cargo test`
+- Rust no bundle 构建：`cd rust && npm run build:no-bundle`
+- Rust 极限压缩构建：`cd rust && npm run build:tiny`
+- Rust no bundle 产物：`rust/src-tauri/target/release/calendarNote.exe`
+- 如本机 Qt 不在默认路径，可在运行 xmake 前设置 `QT_DIR` 指向 Qt 安装目录（例如含 `bin/`、`include/`、`lib/` 的目录）。
 - 涉及 QML 资源加载、运行时路径或图标加载逻辑时，除源码运行外，也应验证打包产物是否仍能找到 `qml/Main.qml` 与 `icon.ico`。
 
 ## Coding Style & Naming Conventions
@@ -43,6 +61,8 @@
 - 月份高亮依赖 `_month_entry_cache` 与 `calendarVersion`；涉及保存、迁移、目录扫描或日历刷新逻辑时，注意同步失效缓存与刷新信号。
 - `_collect_all_diary_files()` 会在新旧路径并存时做去重并优先保留层级更深的新结构文件；修改存储结构时不要破坏这层兼容性。
 - 打包运行时依赖 `resolve_runtime_path()` 和 `load_application_icon()` 查找资源；变更目录布局时请同时验证源码运行与打包运行两种场景。
+- C++ 版继续使用同一 `diary_entries/YYYY/MM/YYYY-MM-DD.txt` 存储结构；修改 C++ 文件读写、搜索或迁移逻辑时，应与 Python 版兼容行为对齐。
+- Rust/Tauri 版继续使用同一存储结构和搜索限制；修改 `rust/src-tauri/src/main.rs` 的读写、迁移、搜索、月度扫描逻辑时，应与 Python/C++ 版兼容行为对齐。
 
 ## Testing Guidelines
 - 目前没有自动化测试；提交前请至少完成针对改动范围的手动验证，并在结果说明里写清楚“做了什么 / 没做什么”。
@@ -68,6 +88,8 @@
   - 如果改动存储/迁移逻辑，请同时验证新目录结构与旧扁平文件结构的兼容行为。
 - 构建验证：
   - 变更 `build_with_nuitka.py`、QML 加载方式、图标/资源路径时，尽量运行 `python build_with_nuitka.py`；
+  - 变更 `cpp/xmake.lua`、`cpp/src/resources.qrc`、`cpp/src/app.rc` 或 C++ 打包路径时，尽量运行 `cd cpp && xmake f -m release -y && xmake -y`；
+  - 变更 `rust/frontend/index.html`、`rust/src-tauri/src/main.rs`、`rust/src-tauri/tauri.conf.json` 或 Rust 打包路径时，尽量运行 `cd rust/src-tauri && cargo test` 与 `cd rust && npm run build:no-bundle`，需要最终压缩体积时运行 `npm run build:tiny`；
   - 若未执行打包验证，请在提交说明中明确标注。
 
 ## Commit & Pull Request Guidelines

@@ -1,0 +1,15 @@
+{
+  "name": "calendar-note-tauri",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build:no-bundle": "tauri build --no-bundle",
+    "build:tiny": "tauri build --no-bundle && powershell -NoProfile -Command \"if (Get-Command upx -ErrorAction SilentlyContinue) { upx --best --lzma src-tauri/target/release/calendarNote.exe } else { Write-Host 'UPX not found; skipped binary repack' }\""
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.11.2"
+  }
+}

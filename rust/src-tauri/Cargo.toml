@@ -1,0 +1,24 @@
+[package]
+name = "calendar_note_tauri"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.77.2"
+
+[[bin]]
+name = "calendarNote"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[dependencies]
+serde = { version = "1.0.228", features = ["derive"] }
+tauri = { version = "2.11.3", default-features = false, features = ["wry", "compression", "common-controls-v6"] }
+tauri-plugin-single-instance = "2.4.2"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "z"
+panic = "abort"
+strip = true

@@ -1,0 +1,920 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>日历笔记本</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #09090b;
+      --surface: #111827;
+      --elevated: #18181b;
+      --muted: #27272a;
+      --border: #3f3f46;
+      --text: #fafafa;
+      --subtle: #a1a1aa;
+      --faint: #71717a;
+      --primary: #fafafa;
+      --primary-text: #09090b;
+      --success: #4ade80;
+      --danger: #f87171;
+      --info: #60a5fa;
+      --mark: #fde68a;
+      --mark-text: #7c2d12;
+      font-family: "Microsoft YaHei UI", system-ui, sans-serif;
+    }
+
+    body.light {
+      color-scheme: light;
+      --bg: #fafafa;
+      --surface: #ffffff;
+      --elevated: #fcfcfd;
+      --muted: #f4f4f5;
+      --border: #d4d4d8;
+      --text: #18181b;
+      --subtle: #71717a;
+      --faint: #a1a1aa;
+      --primary: #18181b;
+      --primary-text: #fafafa;
+      --success: #15803d;
+      --danger: #dc2626;
+      --info: #2563eb;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-width: 820px;
+      min-height: 620px;
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+    }
+
+    button, input, textarea {
+      font: inherit;
+    }
+
+    button {
+      height: 40px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0 14px;
+      background: var(--surface);
+      color: var(--text);
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    button:hover { background: var(--muted); }
+    button:disabled { cursor: default; opacity: .55; }
+    button.primary { background: var(--primary); color: var(--primary-text); border-color: var(--primary); }
+    button.danger { color: var(--danger); }
+    button.icon { width: 40px; padding: 0; font-size: 20px; }
+
+    input {
+      height: 44px;
+      min-width: 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0 14px;
+      background: var(--surface);
+      color: var(--text);
+      outline: none;
+    }
+
+    input:focus, textarea:focus { border-color: var(--subtle); }
+
+    textarea {
+      width: 100%;
+      height: 100%;
+      resize: none;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 22px 24px 28px;
+      background: var(--elevated);
+      color: var(--text);
+      outline: none;
+      line-height: 1.65;
+      font: 15px/1.65 Consolas, "Microsoft YaHei UI", monospace;
+    }
+
+    .topbar, .statusbar {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 24px;
+      border-color: var(--border);
+      background: var(--bg);
+    }
+
+    .topbar { height: 78px; border-bottom: 1px solid var(--border); }
+    .statusbar { height: 48px; border-top: 1px solid var(--border); color: var(--subtle); font-size: 12px; }
+    .title { flex: 1; min-width: 0; }
+    .title h1 { margin: 0; font-size: 24px; line-height: 1.2; }
+    .title p { margin: 4px 0 0; color: var(--subtle); font-size: 13px; }
+    .spacer { flex: 1; min-width: 0; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      height: 30px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 0 12px;
+      background: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .badge.success { color: var(--success); }
+    .badge.danger { color: var(--danger); }
+    .badge.info { color: var(--info); }
+
+    .layout {
+      height: calc(100vh - 126px);
+      padding: 20px 24px;
+      display: grid;
+      grid-template-columns: minmax(330px, 400px) minmax(0, 1fr);
+      gap: 20px;
+    }
+
+    .panel {
+      min-height: 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+    }
+
+    .sidebar {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow: auto;
+    }
+
+    .search-row, .inline-row, .month-head, .editor-head, .dialog-head, .find-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .search-row input { flex: 1; }
+    .inline-row { justify-content: space-between; }
+    .inline-row span { color: var(--subtle); font-size: 13px; line-height: 1.4; }
+
+    .today { width: 100%; height: 46px; }
+    .month-head h2 { flex: 1; margin: 0; font-size: 20px; }
+    .month-head small { display: block; margin-top: 4px; color: var(--subtle); font-size: 12px; font-weight: 400; }
+
+    .weekdays, .month-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 6px;
+    }
+
+    .weekdays {
+      color: var(--subtle);
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .day {
+      position: relative;
+      aspect-ratio: 1;
+      min-height: 38px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text);
+      font-weight: 700;
+      padding: 0;
+    }
+
+    .day.other { color: var(--faint); font-weight: 500; }
+    .day.today { border-color: var(--subtle); }
+    .day.selected { background: var(--primary); color: var(--primary-text); border-color: var(--primary); }
+    .day .dot {
+      position: absolute;
+      left: 50%;
+      bottom: 5px;
+      width: 5px;
+      height: 5px;
+      transform: translateX(-50%);
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .file-path {
+      display: grid;
+      gap: 6px;
+      color: var(--subtle);
+      font-size: 12px;
+    }
+
+    .file-path code {
+      color: var(--text);
+      font-family: Consolas, monospace;
+      overflow-wrap: anywhere;
+    }
+
+    .editor-card {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: 14px;
+    }
+
+    .editor-head {
+      min-height: 56px;
+    }
+
+    .editor-head h2 {
+      flex: 1;
+      min-width: 0;
+      margin: 0;
+      font-size: 26px;
+      line-height: 1.2;
+    }
+
+    .editor-wrap { min-height: 0; }
+
+    dialog {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0;
+      background: var(--surface);
+      color: var(--text);
+      box-shadow: 0 24px 80px #0008;
+    }
+
+    dialog::backdrop { background: #0009; }
+
+    .dialog {
+      width: min(1100px, calc(100vw - 56px));
+      height: min(760px, calc(100vh - 80px));
+      padding: 22px;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: 18px;
+    }
+
+    .dialog-head h2 { flex: 1; margin: 0; font-size: 24px; }
+    .dialog-grid {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(280px, .9fr) minmax(0, 1.2fr);
+      gap: 16px;
+    }
+
+    .results, .preview {
+      min-height: 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--elevated);
+      overflow: auto;
+    }
+
+    .result {
+      width: calc(100% - 16px);
+      min-height: 72px;
+      margin: 8px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--text);
+      text-align: left;
+      display: block;
+      height: auto;
+    }
+
+    .result.active { background: var(--muted); border-color: var(--subtle); }
+    .result strong { display: block; margin-bottom: 6px; font-size: 14px; }
+    .result span { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; color: var(--subtle); font-size: 12px; line-height: 1.45; }
+
+    .preview {
+      padding: 16px;
+      font: 14px/1.7 Consolas, "Microsoft YaHei UI", monospace;
+      white-space: pre-wrap;
+    }
+
+    mark {
+      background: var(--mark);
+      color: var(--mark-text);
+      border-radius: 4px;
+      padding: 0 2px;
+      font-weight: 700;
+    }
+
+    .pending {
+      width: min(460px, calc(100vw - 40px));
+      padding: 20px;
+    }
+
+    .pending h2 { margin: 0 0 10px; font-size: 20px; }
+    .pending p { margin: 0 0 18px; color: var(--subtle); line-height: 1.5; }
+    .pending .buttons { display: flex; justify-content: flex-end; gap: 10px; }
+
+    .find-panel {
+      position: fixed;
+      z-index: 20;
+      top: 104px;
+      right: 48px;
+      width: 420px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      background: var(--surface);
+      box-shadow: 0 18px 50px #0007;
+    }
+
+    .find-panel.hidden { display: none; }
+    .find-handle {
+      height: 34px;
+      margin-bottom: 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: var(--muted);
+      cursor: grab;
+      display: flex;
+      justify-content: space-between;
+      color: var(--subtle);
+      font-size: 12px;
+      user-select: none;
+    }
+    .find-handle strong { color: var(--text); }
+    .find-row input { flex: 1; }
+    .find-options { margin-top: 12px; display: flex; align-items: center; gap: 12px; color: var(--subtle); font-size: 12px; }
+    .find-options label { display: inline-flex; align-items: center; gap: 6px; color: var(--text); }
+    .find-options input { width: auto; height: auto; }
+
+    @media (max-width: 1039px), (max-aspect-ratio: 11/10) {
+      body { overflow: auto; }
+      .layout {
+        height: auto;
+        min-height: calc(100vh - 126px);
+        grid-template-columns: 1fr;
+      }
+      .sidebar { min-height: 360px; }
+      .editor-card { min-height: 560px; }
+      .dialog-grid { grid-template-columns: 1fr; }
+      .find-panel { right: 24px; width: min(420px, calc(100vw - 48px)); }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="title">
+      <h1>日历笔记本</h1>
+      <p id="windowTitle">日历笔记本</p>
+    </div>
+    <span id="saveBadge" class="badge success">已保存</span>
+    <button id="themeBtn">切换浅色模式</button>
+  </header>
+
+  <main class="layout">
+    <aside class="panel sidebar">
+      <div class="search-row">
+        <input id="globalSearch" placeholder="搜索所有日记内容…" autocomplete="off">
+        <button id="searchBtn" class="primary">搜索</button>
+      </div>
+
+      <div class="inline-row">
+        <span id="autoStatus">自动保存：已开启（30 秒）</span>
+        <button id="autoToggle" class="danger">关闭自动保存</button>
+      </div>
+
+      <button id="todayBtn" class="today primary">今天</button>
+
+      <section>
+        <div class="month-head">
+          <div class="spacer">
+            <h2 id="monthTitle">2026 年 6 月</h2>
+            <small>带圆点的日期表示已有日记内容</small>
+          </div>
+          <button id="prevMonth" class="icon" aria-label="上个月">‹</button>
+          <button id="nextMonth" class="icon" aria-label="下个月">›</button>
+        </div>
+      </section>
+
+      <div class="weekdays">
+        <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
+      </div>
+      <div id="monthGrid" class="month-grid"></div>
+
+      <div class="file-path">
+        <span>当前文件</span>
+        <code id="entryPath"></code>
+      </div>
+    </aside>
+
+    <section class="editor-card">
+      <div class="editor-head">
+        <h2 id="dateDisplay"></h2>
+        <span id="autoBadge" class="badge info">自动保存开启</span>
+        <button id="findOpen">页面内查找</button>
+      </div>
+      <div class="editor-wrap">
+        <textarea id="editor" spellcheck="false" placeholder="请在这里开始记录今天的想法、计划与回顾…"></textarea>
+      </div>
+    </section>
+  </main>
+
+  <footer class="statusbar">
+    <span id="statusText" class="spacer"></span>
+    <span id="autoFooter">自动保存：已开启（30 秒）</span>
+  </footer>
+
+  <dialog id="searchDialog">
+    <div class="dialog">
+      <div class="dialog-head">
+        <h2>搜索结果</h2>
+        <span id="resultCount" class="badge">找到 0 个结果</span>
+        <button id="openResult" class="primary" disabled>跳转到日期</button>
+        <button id="closeSearch">关闭</button>
+      </div>
+      <div class="dialog-grid">
+        <div id="results" class="results"></div>
+        <div id="preview" class="preview"></div>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="pendingDialog">
+    <div class="pending">
+      <h2 id="pendingTitle">未保存内容</h2>
+      <p id="pendingMessage">当前日记尚未保存，是否先保存再继续？</p>
+      <div class="buttons">
+        <button id="pendingCancel">Cancel</button>
+        <button id="pendingDiscard" class="danger">Discard</button>
+        <button id="pendingSave" class="primary">Save</button>
+      </div>
+    </div>
+  </dialog>
+
+  <div id="findPanel" class="find-panel hidden">
+    <div id="findHandle" class="find-handle"><strong>页面内查找</strong><span>拖动此处移动</span></div>
+    <div class="find-row">
+      <input id="findText" placeholder="在当前日记中查找…" autocomplete="off">
+      <button id="findClose">关闭</button>
+    </div>
+    <div class="find-options">
+      <label><input id="caseSensitive" type="checkbox"> 区分大小写</label>
+      <span id="findCount" class="spacer"></span>
+      <button id="findPrev">上一个</button>
+      <button id="findNext">下一个</button>
+    </div>
+  </div>
+
+  <script>
+    const invoke = window.__TAURI__.core.invoke;
+    const appWindow = window.__TAURI__.window?.getCurrentWindow?.();
+    const weekdays = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+    const state = {
+      currentDate: todayIso(),
+      lastSystemDate: todayIso(),
+      shownYear: 2000,
+      shownMonth: 0,
+      content: "",
+      lastSavedContent: "",
+      modified: false,
+      autoSaveEnabled: true,
+      autoSaving: false,
+      lastEditAt: Date.now(),
+      themeMode: "dark",
+      entryPath: "",
+      monthEntries: new Set(),
+      searchKeyword: "",
+      searchResults: [],
+      selectedSearchIndex: -1,
+      findMatches: [],
+      findIndex: -1
+    };
+
+    const $ = (id) => document.getElementById(id);
+    const editor = $("editor");
+
+    function pad(n) { return String(n).padStart(2, "0"); }
+    function isoFromDate(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+    function todayIso() { return isoFromDate(new Date()); }
+    function dateFromIso(iso) { return new Date(`${iso}T00:00:00`); }
+    function entryPathFor(iso) { return `diary_entries/${iso.slice(0, 4)}/${iso.slice(5, 7)}/${iso}.txt`; }
+    function currentDateDisplay() {
+      const d = dateFromIso(state.currentDate);
+      return `${state.currentDate} · ${weekdays[d.getDay()]}`;
+    }
+    function setStatus(text, timeout = 0) {
+      $("statusText").textContent = text || statusFallback();
+      clearTimeout(setStatus.timer);
+      if (text && timeout > 0) setStatus.timer = setTimeout(() => renderStatus(), timeout);
+    }
+    function statusFallback() {
+      return `${state.modified ? "未保存更改" : "已保存"} · ${state.entryPath || entryPathFor(state.currentDate)}`;
+    }
+    function autoText() {
+      if (state.autoSaving) return "自动保存：保存中…";
+      return state.autoSaveEnabled ? "自动保存：已开启（30 秒）" : "自动保存：已关闭";
+    }
+    function setModified(modified) {
+      state.modified = modified;
+      renderStatus();
+    }
+    function renderStatus() {
+      const saved = !state.modified;
+      $("saveBadge").textContent = saved ? "已保存" : "未保存更改";
+      $("saveBadge").className = `badge ${saved ? "success" : "danger"}`;
+      $("windowTitle").textContent = `日历笔记本 · ${state.currentDate}${saved ? "" : " *"}`;
+      $("statusText").textContent = statusFallback();
+      $("autoStatus").textContent = autoText();
+      $("autoFooter").textContent = autoText();
+      $("autoToggle").textContent = state.autoSaveEnabled ? "关闭自动保存" : "启用自动保存";
+      $("autoToggle").className = state.autoSaveEnabled ? "danger" : "";
+      $("autoBadge").textContent = state.autoSaveEnabled ? "自动保存开启" : "自动保存关闭";
+      $("autoBadge").className = `badge ${state.autoSaveEnabled ? "info" : "danger"}`;
+      $("themeBtn").textContent = state.themeMode === "dark" ? "切换浅色模式" : "切换深色模式";
+      document.title = $("windowTitle").textContent;
+    }
+    function applyTheme(theme) {
+      state.themeMode = theme === "light" ? "light" : "dark";
+      document.body.classList.toggle("light", state.themeMode === "light");
+      document.documentElement.style.colorScheme = state.themeMode;
+      renderStatus();
+    }
+
+    async function loadDate(iso) {
+      const response = await invoke("load_entry", { isoDate: iso });
+      state.currentDate = iso;
+      state.content = response.content;
+      state.lastSavedContent = response.content;
+      state.entryPath = response.path;
+      editor.value = response.content;
+      setModified(false);
+      syncShownMonth(iso);
+      await refreshMonth();
+      renderAll();
+    }
+
+    async function saveCurrent(statusText = "已保存") {
+      const response = await invoke("save_entry", { isoDate: state.currentDate, content: state.content });
+      state.entryPath = response.path;
+      state.lastSavedContent = state.content;
+      setModified(false);
+      await refreshMonth();
+      renderCalendar();
+      if (statusText) setStatus(`${statusText} · ${state.currentDate}`, 2000);
+      return true;
+    }
+
+    function showPending(title, message) {
+      return new Promise((resolve) => {
+        const dialog = $("pendingDialog");
+        $("pendingTitle").textContent = title;
+        $("pendingMessage").textContent = message;
+        const cleanup = (value) => {
+          dialog.oncancel = null;
+          $("pendingSave").onclick = $("pendingDiscard").onclick = $("pendingCancel").onclick = null;
+          dialog.close();
+          resolve(value);
+        };
+        dialog.oncancel = (event) => {
+          event.preventDefault();
+          cleanup("cancel");
+        };
+        $("pendingSave").onclick = () => cleanup("save");
+        $("pendingDiscard").onclick = () => cleanup("discard");
+        $("pendingCancel").onclick = () => cleanup("cancel");
+        dialog.showModal();
+      });
+    }
+
+    async function confirmPending(title, message) {
+      if (!state.modified) return true;
+      const action = await showPending(title, message);
+      if (action === "cancel") return false;
+      if (action === "save") return saveCurrent("已保存");
+      setModified(false);
+      return true;
+    }
+
+    async function selectDate(iso) {
+      if (iso === state.currentDate) return;
+      if (!await confirmPending("未保存内容", "当前日记尚未保存，是否先保存再切换日期？")) return;
+      await loadDate(iso);
+    }
+
+    function syncShownMonth(iso) {
+      const d = dateFromIso(iso);
+      state.shownYear = d.getFullYear();
+      state.shownMonth = d.getMonth();
+    }
+
+    async function refreshMonth() {
+      const dates = await invoke("month_entries", { year: state.shownYear, month: state.shownMonth + 1 });
+      state.monthEntries = new Set(dates);
+    }
+
+    function renderCalendar() {
+      $("monthTitle").textContent = `${state.shownYear} 年 ${state.shownMonth + 1} 月`;
+      const grid = $("monthGrid");
+      grid.innerHTML = "";
+      const first = new Date(state.shownYear, state.shownMonth, 1);
+      const offset = (first.getDay() + 6) % 7;
+      const start = new Date(state.shownYear, state.shownMonth, 1 - offset);
+      const today = todayIso();
+      for (let i = 0; i < 42; i++) {
+        const d = new Date(start);
+        d.setDate(start.getDate() + i);
+        const iso = isoFromDate(d);
+        const btn = document.createElement("button");
+        btn.className = "day";
+        if (d.getMonth() !== state.shownMonth) btn.classList.add("other");
+        if (iso === today) btn.classList.add("today");
+        if (iso === state.currentDate) btn.classList.add("selected");
+        btn.textContent = d.getDate();
+        btn.onclick = () => selectDate(iso);
+        if (state.monthEntries.has(iso)) {
+          const dot = document.createElement("span");
+          dot.className = "dot";
+          btn.appendChild(dot);
+        }
+        grid.appendChild(btn);
+      }
+    }
+
+    function renderAll() {
+      $("todayBtn").textContent = `今天 · ${state.lastSystemDate}`;
+      $("dateDisplay").textContent = currentDateDisplay();
+      $("entryPath").textContent = state.entryPath || entryPathFor(state.currentDate);
+      renderCalendar();
+      renderStatus();
+      refreshFind();
+    }
+
+    function setSearchBusy(busy) {
+      $("globalSearch").disabled = busy;
+      $("searchBtn").disabled = busy;
+      $("searchBtn").textContent = busy ? "搜索中" : "搜索";
+    }
+
+    async function performSearch() {
+      const keyword = $("globalSearch").value.trim();
+      if (!keyword) {
+        alert("请输入要搜索的关键词");
+        return;
+      }
+      if (!await saveCurrent("")) return;
+      state.searchKeyword = keyword;
+      setSearchBusy(true);
+      setStatus(`正在搜索“${keyword}”...`);
+      try {
+        state.searchResults = await invoke("search_entries", { keyword });
+      } finally {
+        setSearchBusy(false);
+      }
+      $("resultCount").textContent = `找到 ${state.searchResults.length} 个结果`;
+      if (state.searchResults.length === 0) {
+        $("searchDialog").close();
+        setStatus("");
+        alert(`未找到包含“${keyword}”的日记`);
+        return;
+      }
+      state.selectedSearchIndex = 0;
+      renderSearchResults();
+      setStatus(`找到 ${state.searchResults.length} 个结果`, 2500);
+      $("searchDialog").showModal();
+    }
+
+    function renderSearchResults() {
+      const list = $("results");
+      list.innerHTML = "";
+      state.searchResults.forEach((item, index) => {
+        const row = document.createElement("button");
+        row.className = `result ${index === state.selectedSearchIndex ? "active" : ""}`;
+        row.innerHTML = `<strong></strong><span></span>`;
+        row.querySelector("strong").textContent = item.date;
+        row.querySelector("span").textContent = item.match_text || "该条结果没有可显示的摘要";
+        row.onclick = () => {
+          state.selectedSearchIndex = index;
+          renderSearchResults();
+        };
+        row.ondblclick = async () => openSelectedSearchResult();
+        list.appendChild(row);
+      });
+      const selected = state.searchResults[state.selectedSearchIndex];
+      $("openResult").disabled = !selected;
+      $("preview").innerHTML = selected ? highlightedPreview(selected.content, state.searchKeyword) : "";
+    }
+
+    function escapeHtml(text) {
+      return text.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+    }
+
+    function highlightedPreview(content, keyword) {
+      if (!keyword) return escapeHtml(content);
+      const re = new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+      let output = "";
+      let last = 0;
+      for (const match of content.matchAll(re)) {
+        output += escapeHtml(content.slice(last, match.index));
+        output += `<mark>${escapeHtml(match[0])}</mark>`;
+        last = match.index + match[0].length;
+      }
+      return output + escapeHtml(content.slice(last));
+    }
+
+    async function openSelectedSearchResult() {
+      const selected = state.searchResults[state.selectedSearchIndex];
+      if (!selected) return;
+      $("searchDialog").close();
+      await selectDate(selected.date);
+    }
+
+    function openFind() {
+      const panel = $("findPanel");
+      if (!panel.classList.contains("hidden")) {
+        panel.classList.add("hidden");
+        editor.focus();
+        return;
+      }
+      const selected = editor.value.slice(editor.selectionStart, editor.selectionEnd);
+      if (selected) $("findText").value = selected;
+      panel.classList.remove("hidden");
+      $("findText").focus();
+      $("findText").select();
+      refreshFind();
+    }
+
+    function refreshFind() {
+      if ($("findPanel").classList.contains("hidden")) return;
+      const query = $("findText").value;
+      if (!query) {
+        state.findMatches = [];
+        state.findIndex = -1;
+        $("findCount").textContent = "";
+        return;
+      }
+      const source = $("caseSensitive").checked ? editor.value : editor.value.toLowerCase();
+      const needle = $("caseSensitive").checked ? query : query.toLowerCase();
+      const matches = [];
+      for (let from = 0; from <= source.length - needle.length;) {
+        const pos = source.indexOf(needle, from);
+        if (pos < 0) break;
+        matches.push([pos, pos + query.length]);
+        from = pos + Math.max(needle.length, 1);
+      }
+      state.findMatches = matches;
+      state.findIndex = matches.length ? Math.max(0, Math.min(state.findIndex, matches.length - 1)) : -1;
+      if (state.findIndex >= 0) selectFind(state.findIndex);
+      $("findCount").textContent = matches.length ? `${state.findIndex + 1}/${matches.length}` : "未找到";
+    }
+
+    function selectFind(index) {
+      if (!state.findMatches.length) return;
+      state.findIndex = (index + state.findMatches.length) % state.findMatches.length;
+      const [start, end] = state.findMatches[state.findIndex];
+      editor.focus();
+      editor.setSelectionRange(start, end);
+      $("findText").focus();
+      $("findCount").textContent = `${state.findIndex + 1}/${state.findMatches.length}`;
+    }
+
+    function dragFindPanel() {
+      const handle = $("findHandle");
+      const panel = $("findPanel");
+      let startX = 0, startY = 0, panelX = 0, panelY = 0;
+      handle.addEventListener("pointerdown", (event) => {
+        startX = event.clientX;
+        startY = event.clientY;
+        const box = panel.getBoundingClientRect();
+        panelX = box.left;
+        panelY = box.top;
+        handle.setPointerCapture(event.pointerId);
+      });
+      handle.addEventListener("pointermove", (event) => {
+        if (!handle.hasPointerCapture(event.pointerId)) return;
+        const x = Math.max(16, Math.min(window.innerWidth - panel.offsetWidth - 16, panelX + event.clientX - startX));
+        const y = Math.max(16, Math.min(window.innerHeight - panel.offsetHeight - 16, panelY + event.clientY - startY));
+        panel.style.left = `${x}px`;
+        panel.style.right = "auto";
+        panel.style.top = `${y}px`;
+      });
+    }
+
+    async function checkDateUpdate() {
+      const today = todayIso();
+      if (today === state.lastSystemDate) return;
+      const previous = state.lastSystemDate;
+      state.lastSystemDate = today;
+      if (state.currentDate === previous) {
+        if (state.modified) await saveCurrent("");
+        await loadDate(today);
+        setStatus(`已切换到今天 ${today}`, 2000);
+      } else {
+        await refreshMonth();
+        renderAll();
+      }
+    }
+
+    async function boot() {
+      const settings = await invoke("get_settings");
+      applyTheme(settings.theme_mode);
+      await loadDate(state.currentDate);
+      $("themeBtn").onclick = async () => {
+        const next = state.themeMode === "dark" ? "light" : "dark";
+        await invoke("set_theme", { themeMode: next });
+        applyTheme(next);
+        setStatus(next === "light" ? "已切换浅色模式" : "已切换深色模式", 1600);
+      };
+      $("autoToggle").onclick = () => {
+        state.autoSaveEnabled = !state.autoSaveEnabled;
+        setStatus(`自动保存${state.autoSaveEnabled ? "已开启" : "已关闭"}`, 2000);
+        renderStatus();
+      };
+      $("todayBtn").onclick = async () => {
+        const today = todayIso();
+        if (today === state.currentDate) {
+          await refreshMonth();
+          renderAll();
+          return;
+        }
+        await selectDate(today);
+      };
+      $("prevMonth").onclick = async () => {
+        state.shownMonth--;
+        if (state.shownMonth < 0) { state.shownMonth = 11; state.shownYear--; }
+        await refreshMonth();
+        renderCalendar();
+      };
+      $("nextMonth").onclick = async () => {
+        state.shownMonth++;
+        if (state.shownMonth > 11) { state.shownMonth = 0; state.shownYear++; }
+        await refreshMonth();
+        renderCalendar();
+      };
+      editor.addEventListener("input", () => {
+        state.content = editor.value;
+        state.lastEditAt = Date.now();
+        setModified(state.content !== state.lastSavedContent);
+        refreshFind();
+      });
+      $("searchBtn").onclick = performSearch;
+      $("globalSearch").addEventListener("keydown", (event) => {
+        if (event.key === "Enter") performSearch();
+      });
+      $("closeSearch").onclick = () => $("searchDialog").close();
+      $("openResult").onclick = openSelectedSearchResult;
+      $("findOpen").onclick = openFind;
+      $("findClose").onclick = () => { $("findPanel").classList.add("hidden"); editor.focus(); };
+      $("findText").addEventListener("input", refreshFind);
+      $("findText").addEventListener("keydown", (event) => { if (event.key === "Enter") selectFind(state.findIndex + 1); });
+      $("caseSensitive").onchange = refreshFind;
+      $("findPrev").onclick = () => selectFind(state.findIndex - 1);
+      $("findNext").onclick = () => selectFind(state.findIndex + 1);
+      document.addEventListener("keydown", async (event) => {
+        if (event.ctrlKey && event.key.toLowerCase() === "s") {
+          event.preventDefault();
+          await saveCurrent("已保存");
+        } else if (event.ctrlKey && event.key.toLowerCase() === "f") {
+          event.preventDefault();
+          openFind();
+        } else if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "a") {
+          event.preventDefault();
+          $("autoToggle").click();
+        } else if (event.key === "F3") {
+          event.preventDefault();
+          selectFind(state.findIndex + (event.shiftKey ? -1 : 1));
+        } else if (event.key === "Escape" && !$("findPanel").classList.contains("hidden")) {
+          $("findPanel").classList.add("hidden");
+          editor.focus();
+        }
+      });
+      dragFindPanel();
+      setInterval(async () => {
+        if (!state.autoSaveEnabled || !state.modified || state.autoSaving || Date.now() - state.lastEditAt < 2500) return;
+        state.autoSaving = true;
+        renderStatus();
+        try { await saveCurrent("自动保存完成"); }
+        finally { state.autoSaving = false; renderStatus(); }
+      }, 30000);
+      setInterval(checkDateUpdate, 60000);
+      if (appWindow?.onCloseRequested) {
+        await appWindow.onCloseRequested(async (event) => {
+          event.preventDefault();
+          if (!state.modified || await confirmPending("退出确认", "当前日记尚未保存，是否在退出前保存？")) {
+            await invoke("exit_app");
+          }
+        });
+      }
+    }
+
+    boot().catch((error) => {
+      console.error(error);
+      alert(`启动失败：${error}`);
+    });
+  </script>
+</body>
+</html>

@@ -45,3 +45,7 @@ out/
 *.exe
 resources_rc.py
 .codegraph/
+.xmake/
+node_modules/
+rust/src-tauri/target/
+rust/src-tauri/gen/
